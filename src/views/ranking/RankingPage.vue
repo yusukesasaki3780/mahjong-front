@@ -32,6 +32,13 @@ const formatCurrency = (value?: number | null): string => {
   return `¥${amount.toLocaleString('ja-JP')}`;
 };
 
+const currencyClass = (value?: number | null): string => {
+  const amount = typeof value === 'number' && Number.isFinite(value) ? value : 0;
+  if (amount > 0) return 'positive';
+  if (amount < 0) return 'negative';
+  return '';
+};
+
 const formatAveragePlace = (value?: number | null): string =>
   typeof value === 'number' && Number.isFinite(value) ? value.toFixed(2) : '-';
 
@@ -105,6 +112,20 @@ const handleGameTypeChange = (gameType: GameType) => {
   fetchRanking();
 };
 
+const badgeStyle = (index: number): Record<string, string> => {
+  const palette = [
+    { bg: '#FDF3D3', color: '#B8860B' }, // Gold
+    { bg: '#F0F2F4', color: '#7D7F83' }, // Silver
+    { bg: '#F7E0D1', color: '#8B4513' }, // Bronze
+  ];
+  if (index < palette.length) {
+    return { backgroundColor: palette[index].bg, color: palette[index].color };
+  }
+  return { backgroundColor: '#E6E8EC', color: '#4B5563' };
+};
+
+const formatPlaceLabel = (rank: number): string => `${rank}位`;
+
 </script>
 
 <template>
@@ -145,16 +166,19 @@ const handleGameTypeChange = (gameType: GameType) => {
           :key="item.userId"
           class="ranking-card"
         >
-          <div class="ranking-badge" :class="{ first: index === 0 }">
-            #{{ index + 1 }}
+          <div class="ranking-badge" :style="badgeStyle(index)">
+            {{ formatPlaceLabel(index + 1) }}
           </div>
           <div class="ranking-info">
-            <h3>{{ item.name }}</h3>
+            <div class="info-header">
+              <h3>{{ item.name }}</h3>
+              <span class="games">対局数: {{ item.gameCount ?? '-' }}</span>
+            </div>
             <p class="meta">
-              対局数: {{ item.gameCount ?? '-' }} / 平均順位: {{ formatAveragePlace(item.averagePlace) }}
+              平均順位: {{ formatAveragePlace(item.averagePlace) }}
             </p>
           </div>
-          <div class="ranking-income">
+          <div class="ranking-income" :class="currencyClass(item.totalIncome)">
             <span>総ゲーム収支</span>
             <strong>{{ formatCurrency(item.totalIncome) }}</strong>
           </div>
@@ -186,45 +210,54 @@ const handleGameTypeChange = (gameType: GameType) => {
 .ranking-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .ranking-card {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 16px;
+  padding: 18px;
+  box-shadow: 0 15px 35px rgba(15, 23, 42, 0.08);
+  border-radius: 16px;
 }
 
 .ranking-badge {
-  width: 48px;
-  height: 48px;
-  border-radius: 16px;
-  background: rgba(45, 101, 255, 0.1);
-  color: var(--color-brand);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  min-width: 64px;
+  padding: 8px 14px;
+  border-radius: 999px;
   font-weight: 700;
-  font-size: 18px;
-}
-
-.ranking-badge.first {
-  background: rgba(255, 184, 0, 0.15);
-  color: var(--color-accent);
+  font-size: 16px;
+  text-align: center;
 }
 
 .ranking-info {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.info-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
 }
 
 .ranking-info h3 {
   margin: 0;
   font-size: 16px;
+  font-weight: 600;
+}
+
+.games {
+  font-size: 13px;
+  color: var(--color-subtle);
 }
 
 .ranking-info .meta {
-  margin: 4px 0 0;
+  margin: 0;
   font-size: 13px;
   color: var(--color-subtle);
 }
@@ -240,8 +273,17 @@ const handleGameTypeChange = (gameType: GameType) => {
 
 .ranking-income strong {
   display: block;
-  font-size: 16px;
-  color: var(--color-brand);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.ranking-income.positive strong {
+  color: #16a34a;
+}
+
+.ranking-income.negative strong {
+  color: #dc2626;
 }
 
 .empty-card {

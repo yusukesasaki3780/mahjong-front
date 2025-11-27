@@ -28,12 +28,25 @@ const gameTypeLabel: Record<string, string> = {
   SANMA: '三麻',
 };
 
-const formatCurrency = (value: number): string =>
+const formatCurrency = (value?: number | null): string =>
   new Intl.NumberFormat('ja-JP', {
     style: 'currency',
     currency: 'JPY',
     maximumFractionDigits: 0,
-  }).format(value);
+  }).format(typeof value === 'number' && Number.isFinite(value) ? value : 0);
+
+const amountClass = (value?: number | null): string => {
+  if (typeof value !== 'number' || Number.isNaN(value) || value === 0) {
+    return 'neutral';
+  }
+  return value > 0 ? 'positive' : 'negative';
+};
+
+const modeTagClass = (mode: string): string => {
+  if (mode === 'YONMA') return 'badge badge-yonma';
+  if (mode === 'SANMA') return 'badge badge-sanma';
+  return 'badge';
+};
 
 const buildQuery = (): GameResultQuery => {
   if (dateRange.value && dateRange.value[0] && dateRange.value[1]) {
@@ -134,16 +147,22 @@ const handleCreate = () => {
         </div>
         <div class="result-card__row">
           <span class="label">種別</span>
-          <span class="value badge">{{ gameTypeLabel[item.gameType] ?? item.gameType }}</span>
+          <span :class="modeTagClass(item.gameType)">
+            {{ gameTypeLabel[item.gameType] ?? item.gameType }}
+          </span>
         </div>
         <div class="result-card__split">
           <div>
-        <span class="label">ベース収入</span>
-            <p class="value strong">{{ formatCurrency(item.baseIncome) }}</p>
+            <span class="label">ベース収入</span>
+            <p class="value strong" :class="amountClass(item.baseIncome)">
+              {{ formatCurrency(item.baseIncome ?? 0) }}
+            </p>
           </div>
           <div>
             <span class="label">チップ収入</span>
-            <p class="value strong">{{ formatCurrency(item.tipIncome) }}</p>
+            <p class="value strong" :class="amountClass(item.tipIncome)">
+              {{ formatCurrency(item.tipIncome ?? 0) }}
+            </p>
           </div>
         </div>
         <div class="result-card__split">
@@ -153,7 +172,9 @@ const handleCreate = () => {
           </div>
           <div>
             <span class="label">合計収入</span>
-            <p class="value highlight">{{ formatCurrency(item.totalIncome) }}</p>
+            <p class="value highlight" :class="amountClass(item.totalIncome)">
+              {{ formatCurrency(item.totalIncome ?? 0) }}
+            </p>
           </div>
         </div>
         <div class="result-card__actions">
@@ -247,20 +268,44 @@ const handleCreate = () => {
   color: var(--color-text);
 }
 
+.value.positive {
+  color: #16a34a;
+}
+
+.value.negative {
+  color: #dc2626;
+}
+
+.value.neutral {
+  color: #1f2937;
+}
+
 .value.strong {
   font-weight: 600;
 }
 
 .value.highlight {
   font-weight: 700;
-  color: var(--color-brand);
 }
 
 .badge {
-  padding: 4px 10px;
+  padding: 4px 12px;
   border-radius: 999px;
-  background: rgba(45, 101, 255, 0.12);
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.badge-yonma {
+  background: rgba(59, 130, 246, 0.15);
+  color: #1d4ed8;
+}
+
+.badge-sanma {
+  background: rgba(192, 132, 252, 0.2);
+  color: #7e22ce;
 }
 
 .result-card__actions {

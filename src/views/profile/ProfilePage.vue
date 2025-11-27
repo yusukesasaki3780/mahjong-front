@@ -2,7 +2,7 @@
 import { onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { NCard, NForm, NFormItem, NInput, useMessage, type FormInst } from 'naive-ui';
-import { getUser, updateUser, type UserProfile } from '../../api/users';
+import { getUser, patchUser, type UserProfile, type PatchUserPayload } from '../../api/users';
 import { getStoredUserId } from '../../api/axios';
 import AppPageHeader from '../../components/common/AppPageHeader.vue';
 import ErrorAlert from '../../components/common/ErrorAlert.vue';
@@ -15,7 +15,13 @@ const userId = getStoredUserId();
 const loading = ref(false);
 const saving = ref(false);
 const formRef = ref<FormInst | null>(null);
-const profile = reactive({ name: '', email: '' });
+const profile = reactive({
+  name: '',
+  nickname: '',
+  storeName: '',
+  prefectureCode: '',
+  email: '',
+});
 const errorMessages = ref<string[]>([]);
 
 const profileFieldLabels = {
@@ -41,12 +47,25 @@ const loadProfile = async (): Promise<void> => {
     const data: UserProfile = await getUser(userId);
     profile.name = data.name ?? '';
     profile.email = data.email ?? '';
+    profile.nickname = (data as UserProfile & { nickname?: string }).nickname ?? '';
+    profile.storeName = (data as UserProfile & { storeName?: string }).storeName ?? '';
+    profile.prefectureCode = (data as UserProfile & { prefectureCode?: string }).prefectureCode ?? '';
     errorMessages.value = [];
   } catch (error) {
     setErrors(error, 'プロフィールの取得に失敗しました。');
   } finally {
     loading.value = false;
   }
+};
+
+const buildPayload = (): PatchUserPayload => {
+  const payload: PatchUserPayload = {};
+  if (profile.name?.trim()) payload.name = profile.name.trim();
+  if (profile.nickname?.trim()) payload.nickname = profile.nickname.trim();
+  if (profile.storeName?.trim()) payload.storeName = profile.storeName.trim();
+  if (profile.prefectureCode?.trim()) payload.prefectureCode = profile.prefectureCode.trim();
+  if (profile.email?.trim()) payload.email = profile.email.trim();
+  return payload;
 };
 
 const handleSave = async (): Promise<void> => {
@@ -60,9 +79,15 @@ const handleSave = async (): Promise<void> => {
     return;
   }
 
+  const payload = buildPayload();
+  if (Object.keys(payload).length === 0) {
+    message.error('更新する項目を入力してください。');
+    return;
+  }
+
   saving.value = true;
   try {
-    await updateUser(userId, { name: profile.name, email: profile.email });
+    await patchUser(userId, payload);
     message.success('プロフィールを更新しました');
     errorMessages.value = [];
   } catch (error) {
