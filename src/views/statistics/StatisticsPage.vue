@@ -119,8 +119,6 @@ const lineOption = computed(() => {
 const pieOption = computed(() => {
   if (!stats.value) return {};
   const counts = stats.value.placeCounts;
-  const total =
-    (counts[1] ?? 0) + (counts[2] ?? 0) + (counts[3] ?? 0) + (counts[4] ?? 0);
 
   return themedOption({
     tooltip: { trigger: 'item' },

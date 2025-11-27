@@ -11,7 +11,6 @@ import {
   dateJaJP,
   jaJP,
 } from 'naive-ui';
-import type { CalendarDefaultSlotProps } from 'naive-ui';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ja';
 import updateLocale from 'dayjs/plugin/updateLocale';
@@ -162,7 +161,12 @@ const handleWeekMonthChange = (yearMonth: string): void => {
 
 const isMobile = computed(() => responsive.current.value === 'mobile');
 
-type CalendarSlotProps = CalendarDefaultSlotProps;
+type CalendarSlotProps = {
+  year?: number;
+  month?: number;
+  date?: number;
+  [key: string]: unknown;
+};
 
 // 表示用の年月日情報から YYYY-MM-DD 文字列を生成する
 const formatFromParts = (year: number, monthIndex: number, day: number): string => {

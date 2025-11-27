@@ -13,7 +13,7 @@ import {
   type FormRules,
   type SelectOption,
 } from 'naive-ui';
-import { apiClient, isApiClientError } from '../api/axios';
+import { apiClient } from '../api/axios';
 import { prefectureOptions } from '../constants/prefectures';
 import { extractErrorMessages } from '../utils/validationMessages';
 import ErrorAlert from '../components/common/ErrorAlert.vue';

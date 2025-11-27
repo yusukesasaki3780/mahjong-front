@@ -39,8 +39,11 @@ const formatTime = (value?: string): string => {
   return value.slice(0, 5);
 };
 
-const resolveShiftDate = (shift: Shift): string =>
-  dayjs(shift.date ?? shift.startTime).format('YYYY-MM-DD');
+const resolveShiftDate = (shift: Shift): string => {
+  const source = shift.date ?? shift.startTime ?? shift.startDateTime ?? shift.endDateTime ?? '';
+  const parsed = source ? dayjs(source) : dayjs();
+  return parsed.format('YYYY-MM-DD');
+};
 
 const groupByDate = (shifts: Shift[]): Record<string, Shift[]> => {
   const grouped: Record<string, Shift[]> = {};

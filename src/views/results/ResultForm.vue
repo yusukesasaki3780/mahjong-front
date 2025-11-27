@@ -8,6 +8,7 @@ import {
   NForm,
   NFormItem,
   NInput,
+  NInputNumber,
   NSelect,
   NSpin,
   useDialog,
@@ -50,12 +51,12 @@ const loadingSettings = ref(false);
 interface ResultFormState {
   gameType: GameType;
   playedAt: number | null;
-  place: number | null;
-  baseIncome: number | null;
-  tipCount: number | null;
-  tipIncome: number | null;
-  totalIncome: number | null;
-  note?: string;
+  place: number;
+  baseIncome: number;
+  tipCount: number;
+  tipIncome: number;
+  totalIncome: number;
+  note: string;
 }
 
 const createInitialState = (): ResultFormState => ({
@@ -103,8 +104,18 @@ const notifyError = (error: unknown, fallback: string): void => {
   notification.error({ title: 'エラー', content: description });
 };
 
-const hydrateForm = (payload: ResultFormState) => {
-  Object.assign(formValue, payload);
+const coerceNumber = (value: number | null | undefined, fallback = 0): number =>
+  typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+
+const hydrateForm = (payload: Partial<ResultFormState>) => {
+  formValue.gameType = payload.gameType ?? formValue.gameType;
+  formValue.playedAt = payload.playedAt ?? formValue.playedAt;
+  formValue.place = coerceNumber(payload.place, formValue.place);
+  formValue.baseIncome = coerceNumber(payload.baseIncome);
+  formValue.tipCount = coerceNumber(payload.tipCount);
+  formValue.tipIncome = coerceNumber(payload.tipIncome);
+  formValue.totalIncome = coerceNumber(payload.totalIncome);
+  formValue.note = payload.note ?? '';
 };
 
 const fetchDetail = async (): Promise<void> => {
@@ -117,12 +128,12 @@ const fetchDetail = async (): Promise<void> => {
     hydrateForm({
       gameType: result.gameType,
       playedAt: dayjs(result.playedAt).valueOf(),
-      place: result.place,
-      baseIncome: result.baseIncome,
-      tipCount: result.tipCount,
-      tipIncome: result.tipIncome,
-      totalIncome: result.totalIncome,
-      note: result.note,
+      place: result.place ?? undefined,
+      baseIncome: result.baseIncome ?? undefined,
+      tipCount: result.tipCount ?? undefined,
+      tipIncome: result.tipIncome ?? undefined,
+      totalIncome: result.totalIncome ?? undefined,
+      note: result.note ?? '',
     });
   } catch (error) {
     notifyError(error, '成績の取得に失敗しました');
@@ -160,29 +171,6 @@ const currentTipUnit = computed(() => {
   return settings.value?.yonmaTipUnit ?? 500;
 });
 
-const parseNumericInput = (value: string): number | null => {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return null;
-  }
-  const parsed = Number(trimmed);
-  return Number.isFinite(parsed) ? parsed : null;
-};
-
-const createNumericBinding = (field: keyof ResultFormState) =>
-  computed<string>({
-    get() {
-      const val = formValue[field];
-      return val === null || typeof val === 'undefined' ? '' : String(val);
-    },
-    set(value: string) {
-      formValue[field] = parseNumericInput(value);
-    },
-  });
-
-const baseIncomeInput = createNumericBinding('baseIncome');
-const tipCountInput = createNumericBinding('tipCount');
-
 const tipIncomeDisplay = computed(() => formValue.tipIncome ?? 0);
 const totalIncomeDisplay = computed(() => formValue.totalIncome ?? 0);
 
@@ -203,15 +191,15 @@ watch(
 );
 
 const recalcTipIncome = () => {
-  const count = formValue.tipCount ?? 0;
+  const count = formValue.tipCount;
   formValue.tipIncome = count * (currentTipUnit.value ?? 0);
 };
 
 watch([() => formValue.tipCount, currentTipUnit], recalcTipIncome, { immediate: true });
 
 const recalcTotalIncome = () => {
-  const baseValue = Number(formValue.baseIncome ?? 0);
-  const tipValue = Number(formValue.tipIncome ?? 0);
+  const baseValue = Number(formValue.baseIncome);
+  const tipValue = Number(formValue.tipIncome);
   const place = Number(formValue.place ?? 0);
   let total = baseValue + tipValue;
 
@@ -247,11 +235,11 @@ const toPayload = () => ({
   gameType: formValue.gameType,
   playedAt: dayjs(formValue.playedAt ?? dayjs().valueOf()).format('YYYY-MM-DD'),
   place: Number(formValue.place ?? 1),
-  baseIncome: Number(formValue.baseIncome ?? 0),
-  tipCount: Number(formValue.tipCount ?? 0),
-  tipIncome: Number(formValue.tipIncome ?? 0),
-  totalIncome: Number(formValue.totalIncome ?? 0),
-  note: formValue.note?.trim() ? formValue.note : undefined,
+  baseIncome: Number(formValue.baseIncome),
+  tipCount: Number(formValue.tipCount),
+  tipIncome: Number(formValue.tipIncome),
+  totalIncome: Number(formValue.totalIncome),
+  note: formValue.note.trim() ? formValue.note : undefined,
 });
 
 const handleSubmit = async () => {
@@ -337,22 +325,22 @@ const pageTitle = computed(() => (isEdit.value ? '成績を編集' : '成績を�
           <section class="form-section">
             <h3>収入情報</h3>
             <n-form-item label="ベース収入" path="baseIncome">
-              <n-input
-                v-model:value="baseIncomeInput"
-                type="number"
-                inputmode="numeric"
+              <n-input-number
+                v-model:value="formValue.baseIncome"
+                :show-button="false"
+                inputmode="decimal"
                 placeholder="例: 3400"
-                maxlength="10"
+                :max="10000000"
               />
             </n-form-item>
             <n-form-item label="チップ枚数" path="tipCount">
               <div class="tip-input-row">
-                <n-input
-                  v-model:value="tipCountInput"
-                  type="number"
+                <n-input-number
+                  v-model:value="formValue.tipCount"
+                  :show-button="false"
                   inputmode="numeric"
                   placeholder="例: 5"
-                  maxlength="6"
+                  :min="0"
                 />
                 <div class="tip-adjust-buttons">
                   <n-button size="small" @click="adjustTipCount(-5)">-5</n-button>

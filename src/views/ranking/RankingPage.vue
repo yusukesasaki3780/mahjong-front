@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import dayjs from 'dayjs';
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useNotification, NButton, NButtonGroup, NCard, NSpin } from 'naive-ui';
 import { getRanking, type RankingQueryParams } from '../../api/rankingApi';
 import type { RankingItem, RankingRange } from '../../types/ranking';
@@ -25,7 +25,8 @@ const gameTypeOptions: { label: string; value: GameType }[] = [
 const selectedRange = ref<RankingRange>('daily');
 const selectedGameType = ref<GameType>('YONMA');
 const loading = ref(false);
-const ranking = ref<RankingItem[]>([]);
+const ranking = ref<RankingItem[] | null>(null);
+const rankingData = computed(() => ranking.value ?? []);
 
 const formatCurrency = (value?: number | null): string => {
   const amount = typeof value === 'number' && Number.isFinite(value) ? value : 0;
@@ -160,9 +161,9 @@ const formatPlaceLabel = (rank: number): string => `${rank}位`;
     </n-card>
 
     <n-spin :show="loading">
-      <div v-if="ranking.length" class="ranking-list">
+      <div v-if="rankingData.length" class="ranking-list">
         <n-card
-          v-for="(item, index) in ranking"
+          v-for="(item, index) in rankingData"
           :key="item.userId"
           class="ranking-card"
         >
@@ -184,7 +185,7 @@ const formatPlaceLabel = (rank: number): string => `${rank}位`;
           </div>
         </n-card>
       </div>
-      <n-card v-else class="empty-card">
+      <n-card v-else-if="!loading" class="empty-card">
         ランキングデータがありません。
       </n-card>
     </n-spin>
