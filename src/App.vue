@@ -1,0 +1,22 @@
+<script setup lang="ts">
+import {
+  NConfigProvider,
+  NDialogProvider,
+  NMessageProvider,
+  NNotificationProvider,
+  jaJP,
+  dateJaJP,
+} from 'naive-ui';
+</script>
+
+<template>
+  <n-config-provider :locale="jaJP" :date-locale="dateJaJP">
+    <n-notification-provider>
+      <n-dialog-provider>
+        <n-message-provider>
+          <router-view />
+        </n-message-provider>
+      </n-dialog-provider>
+    </n-notification-provider>
+  </n-config-provider>
+</template>

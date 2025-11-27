@@ -1,0 +1,280 @@
+<script setup lang="ts">
+import dayjs from 'dayjs';
+import { onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
+import { useNotification, NButton, NCard } from 'naive-ui';
+import {
+  getGameResults,
+} from '../../api/gameResultApi';
+import { getStoredUserId, isApiClientError } from '../../api/axios';
+import type { GameResult, GameResultQuery, GameResultResponse } from '../../types/gameResult';
+import AppPageHeader from '../../components/common/AppPageHeader.vue';
+
+const router = useRouter();
+const notification = useNotification();
+const loading = ref(false);
+const rows = ref<GameResult[]>([]);
+const dateRange = ref<[number, number] | null>(null);
+
+const notifyError = (error: unknown, fallback: string): void => {
+  const description = isApiClientError(error) ? error.message : fallback;
+  notification.error({ title: 'エラー', content: description });
+};
+
+const formatPlayedAt = (value: string): string => value.slice(0, 10);
+
+const gameTypeLabel: Record<string, string> = {
+  YONMA: '四麻',
+  SANMA: '三麻',
+};
+
+const formatCurrency = (value: number): string =>
+  new Intl.NumberFormat('ja-JP', {
+    style: 'currency',
+    currency: 'JPY',
+    maximumFractionDigits: 0,
+  }).format(value);
+
+const buildQuery = (): GameResultQuery => {
+  if (dateRange.value && dateRange.value[0] && dateRange.value[1]) {
+    const [rawStart, rawEnd] = dateRange.value;
+    const start = dayjs(rawStart);
+    const end = dayjs(rawEnd);
+    return {
+      startDate: start.format('YYYY-MM-DD'),
+      endDate: end.format('YYYY-MM-DD'),
+    };
+  }
+
+  const reference = dayjs(dateRange.value?.[0] ?? Date.now());
+  const startOfMonth = reference.startOf('month');
+  const endOfMonth = reference.endOf('month');
+  return {
+    startDate: startOfMonth.format('YYYY-MM-DD'),
+    endDate: endOfMonth.format('YYYY-MM-DD'),
+  };
+};
+
+const loadResults = async () => {
+  const userId = getStoredUserId();
+  console.log('[Results] loadResults invoked', { userId });
+  if (!userId) {
+    router.replace('/login');
+    return;
+  }
+  const query = buildQuery();
+  console.log('[Results] calling getGameResults', { userId, query });
+  loading.value = true;
+  try {
+    const response: GameResultResponse = await getGameResults(userId, query);
+    rows.value = response.results;
+    console.log('[Results] getGameResults success', { count: rows.value.length });
+  } catch (error) {
+    console.error('[Results] getGameResults failed', error);
+    notifyError(error, '成績一覧の取得に失敗しました');
+  } finally {
+    loading.value = false;
+  }
+};
+
+onMounted(loadResults);
+
+const handleEdit = (id: string) => {
+  router.push(`/results/${id}/edit`);
+};
+
+const handleReload = () => {
+  loadResults();
+};
+
+const handleCreate = () => {
+  router.push('/results/new');
+};
+
+</script>
+
+<template>
+  <div class="results-page app-page">
+    <AppPageHeader title="成績一覧" back-to="/dashboard">
+      <template #right>
+        <n-button type="primary" size="small" @click="handleCreate">新規作成</n-button>
+      </template>
+    </AppPageHeader>
+    <p class="subtitle">期間で絞り込んでください</p>
+    <n-card class="filters-card">
+      <div class="filters">
+        <label class="filter-label">期間</label>
+        <div class="filter-inputs">
+          <n-date-picker
+            v-model:value="dateRange"
+            type="daterange"
+            clearable
+            size="medium"
+            class="range-picker"
+            start-placeholder="開始日"
+            end-placeholder="終了日"
+          />
+          <n-button tertiary size="medium" @click="handleReload">再読み込み</n-button>
+        </div>
+      </div>
+    </n-card>
+
+    <div v-if="rows.length" class="result-card-list">
+      <n-card
+        v-for="item in rows"
+        :key="item.id"
+        class="result-card"
+        tabindex="0"
+        role="button"
+        @click="handleEdit(item.id)"
+      >
+        <div class="result-card__row">
+          <span class="label">対局日</span>
+          <span class="value">{{ formatPlayedAt(item.playedAt) }}</span>
+        </div>
+        <div class="result-card__row">
+          <span class="label">種別</span>
+          <span class="value badge">{{ gameTypeLabel[item.gameType] ?? item.gameType }}</span>
+        </div>
+        <div class="result-card__split">
+          <div>
+        <span class="label">ベース収入</span>
+            <p class="value strong">{{ formatCurrency(item.baseIncome) }}</p>
+          </div>
+          <div>
+            <span class="label">チップ収入</span>
+            <p class="value strong">{{ formatCurrency(item.tipIncome) }}</p>
+          </div>
+        </div>
+        <div class="result-card__split">
+          <div>
+            <span class="label">着順</span>
+            <p class="value strong">{{ item.place }}位</p>
+          </div>
+          <div>
+            <span class="label">合計収入</span>
+            <p class="value highlight">{{ formatCurrency(item.totalIncome) }}</p>
+          </div>
+        </div>
+        <div class="result-card__actions">
+          <n-button text size="small" @click.stop="handleEdit(item.id)">編集</n-button>
+        </div>
+      </n-card>
+    </div>
+    <n-card v-else-if="!loading" class="empty-card">
+      <p>指定された期間に成績はありません。</p>
+    </n-card>
+  </div>
+</template>
+
+<style scoped>
+.results-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.subtitle {
+  margin: 4px 0 8px;
+  color: #94a3b8;
+  font-size: 13px;
+  padding-left: 4px;
+}
+
+.filters-card {
+  padding: 12px;
+}
+.filters {
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.filter-label {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.filter-inputs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.range-picker {
+  min-width: 260px;
+  flex: 1 1 200px;
+}
+
+.result-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.result-card {
+  cursor: pointer;
+  transition: transform 0.2s ease;
+  padding: 16px;
+}
+
+.result-card:hover {
+  transform: translateY(-2px);
+}
+
+.result-card__row,
+.result-card__split {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  gap: 12px;
+}
+
+.result-card__split > div {
+  flex: 1;
+}
+
+.label {
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.value {
+  font-size: 16px;
+  color: var(--color-text);
+}
+
+.value.strong {
+  font-weight: 600;
+}
+
+.value.highlight {
+  font-weight: 700;
+  color: var(--color-brand);
+}
+
+.badge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(45, 101, 255, 0.12);
+  font-size: 14px;
+}
+
+.result-card__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.empty-card {
+  text-align: center;
+  color: #94a3b8;
+}
+
+:deep(.app-page-header) {
+  margin-bottom: 4px;
+}
+</style>

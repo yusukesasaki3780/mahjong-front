@@ -1,0 +1,1 @@
+import pathlib\ntext = pathlib.Path('src/components/common/AppBackButton.vue').read_text(encoding='utf-8', errors='ignore')\nfor i,line in enumerate(text.splitlines()[:40],1):\n    if 'buttonLabel' in line or 'handleClick' in line:\n        print(i, repr(line))

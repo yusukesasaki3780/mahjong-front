@@ -1,0 +1,257 @@
+﻿import dayjs from "dayjs";
+import { apiClient } from './axios';
+
+export interface ShiftBreak {
+  startTime: string;
+  endTime: string;
+}
+
+export interface Shift {
+  id: string;
+  userId: string;
+  date?: string;
+  workDate?: string;
+  startTime?: string;
+  endTime?: string;
+  startDateTime?: string;
+  endDateTime?: string;
+  breakMinutes?: number;
+  memo?: string;
+  breaks?: ShiftBreak[];
+  [key: string]: unknown;
+}
+
+export interface CreateShiftPayload {
+  date: string;
+  startTime: string;
+  endTime: string;
+  breakMinutes?: number;
+  memo?: string;
+  breaks?: ShiftBreak[];
+}
+
+export type UpdateShiftPayload = Partial<CreateShiftPayload>;
+
+export interface ShiftStatsSummary {
+  totalHours: number;
+  nightHours: number;
+  avgHours: number;
+  count: number;
+}
+
+// シフト API のベースパスを生成する
+const basePath = (userId: string): string => `/users/${userId}/shifts`;
+// シフト詳細 API のパスを生成する
+const shiftDetailPath = (userId: string, shiftId: string): string =>
+  `${basePath(userId)}/${shiftId}`;
+
+// シフトデータの日付やメモを扱いやすい形に整形する
+const normalizeShift = (shift: Shift): Shift => {
+  const normalized: Shift = { ...shift };
+
+  if (!normalized.date) {
+    const source = shift.workDate ?? shift.startTime ?? shift.date;
+    if (source) {
+      const parsed = dayjs(source);
+      if (parsed.isValid()) {
+        normalized.date = parsed.format('YYYY-MM-DD');
+      }
+    }
+  }
+
+  if (Array.isArray(shift.breaks)) {
+    normalized.breaks = shift.breaks.map((item) => ({ ...item }));
+  }
+
+  if (typeof shift.memo === 'string') {
+    normalized.memo = shift.memo;
+  } else if (typeof normalized.memo === 'undefined') {
+    normalized.memo = '';
+  }
+
+  return normalized;
+};
+
+// 取得した複数シフトをまとめて整形する
+const normalizeShiftList = (shifts: Shift[]): Shift[] => shifts.map(normalizeShift);
+
+type MonthShiftParams = {
+  rangeType: 'month';
+  yearMonth: string;
+};
+
+type WeekShiftParams = {
+  rangeType: 'week';
+  start: string;
+  end: string;
+};
+
+type DayShiftParams = {
+  rangeType: 'day';
+  date: string;
+};
+
+const DATE_TIME_FORMAT = 'YYYY-MM-DDTHH:mm:ssZ';
+
+// 日付と時間の組み合わせを ISO 文字列に補正する
+const toDateTimeWithOffset = (
+  date: string,
+  timeValue?: string,
+  reference?: dayjs.Dayjs,
+): string | undefined => {
+  if (!timeValue) {
+    return undefined;
+  }
+  const trimmed = timeValue.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const parsedValue = dayjs(trimmed);
+  if (trimmed.includes('T') && parsedValue.isValid()) {
+    return parsedValue.format(DATE_TIME_FORMAT);
+  }
+
+  const baseDate = dayjs(date);
+  if (!baseDate.isValid()) {
+    return timeValue;
+  }
+
+  const [hoursStr, minutesStr = '0'] = trimmed.split(':');
+  const hours = Number(hoursStr);
+  const minutes = Number(minutesStr);
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) {
+    return timeValue;
+  }
+
+  let composed = baseDate.hour(hours).minute(minutes).second(0).millisecond(0);
+  if (reference && composed.isBefore(reference)) {
+    composed = composed.add(1, 'day');
+  }
+
+  return composed.format(DATE_TIME_FORMAT);
+};
+
+// API 送信用に開始・終了時刻や休憩を ISO 形式へ変換する
+const prepareShiftPayload = <T extends Partial<CreateShiftPayload>>(payload: T): T => {
+  if (!payload.date) {
+    return payload;
+  }
+
+  const startIso = payload.startTime ? toDateTimeWithOffset(payload.date, payload.startTime) : undefined;
+  const startMoment = startIso ? dayjs(startIso) : undefined;
+
+  const endIso = payload.endTime
+    ? toDateTimeWithOffset(payload.date, payload.endTime, startMoment)
+    : undefined;
+
+  let convertedBreaks: ShiftBreak[] | undefined;
+  if (payload.breaks) {
+    convertedBreaks = payload.breaks.map((item) => {
+      const breakStartIso = item.startTime
+        ? toDateTimeWithOffset(payload.date!, item.startTime, startMoment)
+        : item.startTime;
+      const breakStartMoment = breakStartIso ? dayjs(breakStartIso) : startMoment;
+      const breakEndIso = item.endTime
+        ? toDateTimeWithOffset(payload.date!, item.endTime, breakStartMoment)
+        : item.endTime;
+      return {
+        ...item,
+        startTime: breakStartIso ?? item.startTime,
+        endTime: breakEndIso ?? item.endTime,
+      };
+    });
+  }
+
+  return {
+    ...payload,
+    startTime: startIso ?? payload.startTime,
+    endTime: endIso ?? payload.endTime,
+    breaks: convertedBreaks ?? payload.breaks,
+  };
+};
+
+// 指定月のシフト一覧を取得する
+export const getShifts = async (
+  userId: string,
+  params: MonthShiftParams,
+): Promise<Shift[]> => {
+  const { data } = await apiClient.get<Shift[]>(basePath(userId), {
+    params,
+  });
+  return normalizeShiftList(data);
+};
+
+// 週単位のシフト一覧を取得する
+export const getWeekShifts = async (
+  userId: string,
+  start: string,
+  end: string,
+): Promise<Shift[]> => {
+  const { data } = await apiClient.get<Shift[]>(basePath(userId), {
+    params: { rangeType: 'week', start, end } satisfies WeekShiftParams,
+  });
+  return normalizeShiftList(data);
+};
+
+// 1 日単位のシフト一覧を取得する
+export const getDailyShifts = async (
+  userId: string,
+  date: string,
+): Promise<Shift[]> => {
+  const { data } = await apiClient.get<Shift[]>(basePath(userId), {
+    params: { rangeType: 'day', date } satisfies DayShiftParams,
+  });
+  return normalizeShiftList(data);
+};
+
+// 指定月のシフト統計情報を取得する
+export const getShiftStats = async (
+  userId: string,
+  yearMonth: string,
+): Promise<ShiftStatsSummary> => {
+  const { data } = await apiClient.get<ShiftStatsSummary>(`${basePath(userId)}/stats`, {
+    params: { yearMonth },
+  });
+  return data;
+};
+
+// シフトを新規作成する
+export const createShift = async (
+  userId: string,
+  payload: CreateShiftPayload,
+): Promise<Shift> => {
+  const nextPayload = prepareShiftPayload(payload);
+  const { data } = await apiClient.post<Shift>(basePath(userId), nextPayload);
+  return normalizeShift(data);
+};
+
+// シフトを全ての項目で更新する
+export const replaceShift = async (
+  userId: string,
+  shiftId: string,
+  payload: CreateShiftPayload,
+): Promise<Shift> => {
+  const nextPayload = prepareShiftPayload(payload);
+  const { data } = await apiClient.put<Shift>(shiftDetailPath(userId, shiftId), nextPayload);
+  return normalizeShift(data);
+};
+
+// シフトを部分更新する
+export const updateShift = async (
+  userId: string,
+  shiftId: string,
+  payload: UpdateShiftPayload,
+): Promise<Shift> => {
+  const nextPayload = prepareShiftPayload(payload);
+  const { data } = await apiClient.patch<Shift>(shiftDetailPath(userId, shiftId), nextPayload);
+  return normalizeShift(data);
+};
+
+// シフトを削除する
+export const deleteShift = async (
+  userId: string,
+  shiftId: string,
+): Promise<void> => {
+  await apiClient.delete(shiftDetailPath(userId, shiftId));
+};
