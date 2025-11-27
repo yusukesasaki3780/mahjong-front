@@ -3,14 +3,17 @@ name: Frontend CI
 on:
   push:
     branches:
-      - main
+      - master    # ← 修正！
     paths:
       - "**/*.vue"
       - "**/*.ts"
       - "package.json"
       - "vite.config.ts"
       - ".github/workflows/frontend-ci.yml"
+
   pull_request:
+    branches:
+      - master    # ← PR も master に
 
 jobs:
   build:
