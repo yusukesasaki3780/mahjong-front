@@ -1,0 +1,66 @@
+name: Auto Generate README
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - README.template.md
+      - README.md
+      - .github/workflows/readme-generate.yml
+      - '**'
+  workflow_dispatch:
+
+jobs:
+  generate:
+    name: Render README from template
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Render README.md
+        shell: bash
+        run: |
+          set -euo pipefail
+          TEMPLATE="README.template.md"
+          TARGET="README.md"
+
+          if [ ! -f "$TEMPLATE" ]; then
+            echo "::error::Template file $TEMPLATE not found."
+            exit 1
+          fi
+
+          DATE=$(date -u +%Y-%m-%d)
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          REPO_NAME=${GITHUB_REPOSITORY##*/}
+
+          cp "$TEMPLATE" "$TARGET"
+
+          sed -i "s/{{[[:space:]]*date[[:space:]]*}}/$DATE/g" "$TARGET"
+          sed -i "s/{{[[:space:]]*repo_name[[:space:]]*}}/$REPO_NAME/g" "$TARGET"
+          sed -i "s/{{[[:space:]]*commit_hash[[:space:]]*}}/$SHORT_SHA/g" "$TARGET"
+
+          echo "Generated README.md from template."
+
+      - name: Commit and push if changed
+        if: github.ref == 'refs/heads/main'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet README.md; then
+            echo "README.md is up to date. No commit needed."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add README.md
+          git commit -m "docs: auto-generate README [skip ci]"
+          git push origin HEAD:main
