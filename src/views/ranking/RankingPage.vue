@@ -119,7 +119,8 @@ const badgeStyle = (index: number): Record<string, string> => {
     { bg: '#F7E0D1', color: '#8B4513' }, // Bronze
   ];
   if (index < palette.length) {
-    return { backgroundColor: palette[index].bg, color: palette[index].color };
+    const item = palette[index];
+    return { backgroundColor: item!.bg, color: item!.color };
   }
   return { backgroundColor: '#E6E8EC', color: '#4B5563' };
 };
