@@ -26,7 +26,7 @@ const selectedRange = ref<RankingRange>('daily');
 const selectedGameType = ref<GameType>('YONMA');
 const loading = ref(false);
 const ranking = ref<RankingItem[] | null>(null);
-const rankingData = computed(() => ranking.value ?? []);
+const rankingData = computed<RankingItem[]>(() => ranking.value ?? []);
 
 const formatCurrency = (value?: number | null): string => {
   const amount = typeof value === 'number' && Number.isFinite(value) ? value : 0;

@@ -97,7 +97,7 @@ const selectDay = (day: Dayjs): void => {
   emit('select-date', { date, shifts: weekShifts.value[date] ?? [] });
 };
 
-const formatWeekdayLabel = (day: Dayjs): string => weekdayShortLabels[day.day()];
+const formatWeekdayLabel = (day: Dayjs): string => weekdayShortLabels[day.day()] ?? '';
 
 const prevWeek = (): void => {
   referenceDate.value = referenceDate.value.subtract(1, 'week');
