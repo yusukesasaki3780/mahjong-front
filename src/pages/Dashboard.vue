@@ -80,7 +80,7 @@ const handleLogout = () => {
 </script>
 
 <template>
-  <div class="dashboard-page app-page">
+  <div class="dashboard-page app-page app-page--right">
     <AppPageHeader title="ダッシュボード">
       <template #right>
         <n-button tertiary size="small" @click="handleLogout">ログアウト</n-button>
@@ -124,12 +124,20 @@ const handleLogout = () => {
 }
 
 :deep(.app-page-header) {
-  padding: 12px 16px;
-  margin: 0 -16px;
+  padding: 12px clamp(12px, 4vw, 48px) 12px clamp(12px, 8vw, 160px);
+  margin: 0;
+}
+
+:deep(.app-page-header h1) {
+  margin: 0;
 }
 
 .dashboard-intro {
   padding: 0 4px;
+  margin-left: clamp(12px, 8vw, 160px);
+  max-width: 520px;
+  text-align: left;
+  padding-right: clamp(12px, 4vw, 48px);
 }
 
 .eyebrow {
@@ -144,6 +152,9 @@ const handleLogout = () => {
   color: var(--color-subtle);
   margin: 0 0 16px;
   font-size: 14px;
+  margin-left: clamp(12px, 8vw, 160px);
+  max-width: 460px;
+  padding-right: clamp(12px, 4vw, 48px);
 }
 
 .menu-grid {
@@ -200,6 +211,21 @@ const handleLogout = () => {
   .menu-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .dashboard-intro {
+    margin-left: clamp(12px, 6vw, 24px);
+    padding-right: clamp(12px, 6vw, 24px);
+  }
+  .subtitle {
+    margin-left: clamp(12px, 6vw, 24px);
+    max-width: 100%;
+    padding-right: clamp(12px, 6vw, 24px);
+  }
+  :deep(.app-page-header) {
+    padding: 12px clamp(12px, 6vw, 24px);
   }
 }
 </style>

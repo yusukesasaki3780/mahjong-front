@@ -4,7 +4,14 @@ import dayjs from 'dayjs';
 import { NBadge } from 'naive-ui';
 import type { Shift } from '../../api/shifts';
 
-const props = defineProps<{ date: string; shifts: Shift[]; isToday?: boolean }>();
+const props = defineProps<{
+  date: string;
+  shifts: Shift[];
+  isToday?: boolean;
+  weekdayLabel?: string;
+  showWeekdayLabel?: boolean;
+  isWeekend?: boolean;
+}>();
 const emit = defineEmits<{ (e: 'select', payload: { date: string; shifts?: Shift[] }): void }>();
 
 const safeDate = computed(() => (typeof props.date === 'string' ? props.date : ''));
@@ -47,6 +54,13 @@ const handleClick = (): void => {
 <template>
   <div class="day-cell" :class="{ today: isToday }" @click="handleClick">
     <div class="day-number">
+      <small
+        v-if="showWeekdayLabel"
+        class="weekday-label"
+        :class="{ weekend: isWeekend }"
+      >
+        {{ weekdayLabel }}
+      </small>
       <n-badge v-if="hasShifts" dot type="success">
         <span>{{ dayNumber }}</span>
       </n-badge>
@@ -80,6 +94,19 @@ const handleClick = (): void => {
 .day-number {
   font-weight: 600;
   margin-bottom: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.weekday-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.weekday-label.weekend {
+  color: #dc2626;
 }
 
 .shift-list {

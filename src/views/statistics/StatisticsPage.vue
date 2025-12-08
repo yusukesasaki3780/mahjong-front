@@ -251,12 +251,18 @@ const yearlyOption = computed(() => themedOption({
   font-size: 12px;
   color: #94a3b8;
   margin: 0;
+  margin-left: clamp(12px, 8vw, 150px);
+  margin-right: clamp(12px, 4vw, 48px);
+  max-width: 520px;
 }
 
 .subtitle {
   margin: 0 0 8px;
   color: var(--color-subtle);
   font-size: 14px;
+  margin-left: clamp(12px, 8vw, 150px);
+  margin-right: clamp(12px, 4vw, 48px);
+  max-width: 520px;
 }
 
 .stats-stack {
@@ -312,6 +318,15 @@ const yearlyOption = computed(() => themedOption({
   }
   .chart {
     height: 240px;
+  }
+}
+
+@media (max-width: 768px) {
+  .eyebrow,
+  .subtitle {
+    margin-left: clamp(12px, 6vw, 24px);
+    margin-right: clamp(12px, 6vw, 24px);
+    max-width: 100%;
   }
 }
 </style>

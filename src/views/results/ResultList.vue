@@ -110,7 +110,9 @@ const handleCreate = () => {
   <div class="results-page app-page">
     <AppPageHeader title="成績一覧" back-to="/dashboard">
       <template #right>
-        <n-button type="primary" size="small" @click="handleCreate">新規作成</n-button>
+        <div class="create-button-wrapper">
+          <n-button type="primary" size="small" @click="handleCreate">新規作成</n-button>
+        </div>
       </template>
     </AppPageHeader>
     <p class="subtitle">期間で絞り込んでください</p>
@@ -196,10 +198,13 @@ const handleCreate = () => {
 }
 
 .subtitle {
-  margin: 4px 0 8px;
+  margin: 4px 0 12px;
   color: #94a3b8;
   font-size: 13px;
-  padding-left: 4px;
+  padding-left: 0;
+  margin-left: clamp(12px, 8vw, 150px);
+  margin-right: clamp(12px, 4vw, 48px);
+  max-width: 480px;
 }
 
 .filters-card {
@@ -321,5 +326,20 @@ const handleCreate = () => {
 
 :deep(.app-page-header) {
   margin-bottom: 4px;
+}
+
+.create-button-wrapper {
+  margin-right: clamp(12px, 6vw, 48px);
+}
+
+@media (max-width: 768px) {
+  .subtitle {
+    margin-left: clamp(12px, 6vw, 24px);
+    margin-right: clamp(12px, 6vw, 24px);
+    max-width: 100%;
+  }
+  .create-button-wrapper {
+    margin-right: clamp(12px, 6vw, 24px);
+  }
 }
 </style>

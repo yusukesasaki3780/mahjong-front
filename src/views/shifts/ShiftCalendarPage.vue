@@ -55,6 +55,7 @@ const monthLabelParts = computed(() => ({
   year: dayjs(calendarValue.value).format('YYYY年'),
   month: dayjs(calendarValue.value).format('M月'),
 }));
+const weekdayNames = ['日', '月', '火', '水', '木', '金', '土'];
 const today = dayjs().format('YYYY-MM-DD');
 
 // さまざまな日付文字列を YYYY-MM-DD の正規化した形式に変換する
@@ -168,6 +169,8 @@ type CalendarSlotProps = {
   [key: string]: unknown;
 };
 
+const currentMonthIndex = computed(() => dayjs(calendarValue.value).month());
+
 // 表示用の年月日情報から YYYY-MM-DD 文字列を生成する
 const formatFromParts = (year: number, monthIndex: number, day: number): string => {
   const month = String(monthIndex + 1).padStart(2, '0');
@@ -188,10 +191,15 @@ const resolveDate = (slotProps: CalendarSlotProps): string => {
 // ShiftDayCell に渡すプロパティを構築する
 const buildCellProps = (slotProps: CalendarSlotProps) => {
   const date = resolveDate(slotProps);
+  const day = dayjs(date);
+  const weekdayIndex = day.day();
   return {
     date,
     shifts: getShiftsByDate(date),
     isToday: isToday(date),
+    weekdayLabel: weekdayNames[weekdayIndex],
+    showWeekdayLabel: day.month() === currentMonthIndex.value && day.date() <= 7,
+    isWeekend: weekdayIndex === 0 || weekdayIndex === 6,
   };
 };
 
@@ -313,9 +321,12 @@ const uiLocale = jaJP;
 }
 
 .subtitle {
-  margin: 0;
+  margin: 0 0 8px;
   color: var(--color-subtle);
   font-size: 14px;
+  margin-left: clamp(12px, 8vw, 160px);
+  margin-right: clamp(12px, 4vw, 48px);
+  max-width: 520px;
 }
 
 .shift-stack {
@@ -391,8 +402,7 @@ const uiLocale = jaJP;
 }
 
 :deep(.n-calendar-weekdays) {
-  padding: 0 4px 4px;
-  font-size: 12px;
+  display: none !important;
 }
 
 :deep(.n-calendar-date__date),
@@ -439,6 +449,14 @@ const uiLocale = jaJP;
 
   .stats-card {
     width: 320px;
+  }
+}
+
+@media (max-width: 768px) {
+  .subtitle {
+    margin-left: clamp(12px, 6vw, 24px);
+    margin-right: clamp(12px, 6vw, 24px);
+    max-width: 100%;
   }
 }
 </style>
