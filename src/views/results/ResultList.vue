@@ -84,7 +84,7 @@ const loadResults = async () => {
     console.log('[Results] getGameResults success', { count: rows.value.length });
   } catch (error) {
     console.error('[Results] getGameResults failed', error);
-    notifyError(error, '成績一覧の取得に失敗しました');
+    notifyError(error, '成績の取得に失敗しました');
   } finally {
     loading.value = false;
   }
@@ -126,6 +126,7 @@ const handleCreate = () => {
             clearable
             size="medium"
             class="range-picker"
+            :to="false"
             start-placeholder="開始日"
             end-placeholder="終了日"
           />
@@ -173,7 +174,7 @@ const handleCreate = () => {
             <p class="value strong">{{ item.place }}位</p>
           </div>
           <div>
-            <span class="label">合計収入</span>
+            <span class="label">合計収支</span>
             <p class="value highlight" :class="amountClass(item.totalIncome)">
               {{ formatCurrency(item.totalIncome ?? 0) }}
             </p>
@@ -185,7 +186,7 @@ const handleCreate = () => {
       </n-card>
     </div>
     <n-card v-else-if="!loading" class="empty-card">
-      <p>指定された期間に成績はありません。</p>
+      <p>該当する成績がありません</p>
     </n-card>
   </div>
 </template>
@@ -340,6 +341,30 @@ const handleCreate = () => {
   }
   .create-button-wrapper {
     margin-right: clamp(12px, 6vw, 24px);
+  }
+}
+
+@media (max-width: 768px) {
+  :global(.n-date-panel.n-date-panel--daterange) {
+    display: flex;
+    flex-direction: column;
+    min-width: 280px;
+  }
+
+  :global(.n-date-panel.n-date-panel--daterange .n-date-panel__vertical-divider) {
+    display: none;
+  }
+
+  :global(.n-date-panel.n-date-panel--daterange .n-date-panel-calendar) {
+    width: 100%;
+    border-left: none;
+    border-top: 1px solid rgba(0, 0, 0, 0.05);
+    margin-top: 8px;
+  }
+
+  :global(.n-date-panel.n-date-panel--daterange .n-date-panel-calendar:first-of-type) {
+    border-top: none;
+    margin-top: 0;
   }
 }
 </style>

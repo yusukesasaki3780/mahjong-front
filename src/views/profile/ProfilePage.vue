@@ -26,6 +26,7 @@ const errorMessages = ref<string[]>([]);
 
 const profileFieldLabels = {
   name: '氏名',
+  nickname: 'ニックネーム',
   email: 'メールアドレス',
 };
 
@@ -110,6 +111,9 @@ onMounted(() => {
       <n-form ref="formRef" :model="profile" label-placement="top">
         <n-form-item label="氏名" path="name" :rule="{ required: true, message: '氏名を入力してください' }">
           <n-input v-model:value="profile.name" placeholder="山田 太郎" />
+        </n-form-item>
+        <n-form-item label="ニックネーム" path="nickname">
+          <n-input v-model:value="profile.nickname" placeholder="アプリに表示される名前" />
         </n-form-item>
         <n-form-item label="メールアドレス" path="email" :rule="{ required: true, message: 'メールアドレスを入力してください' }">
           <n-input v-model:value="profile.email" placeholder="example@mahjong-zoo.jp" />

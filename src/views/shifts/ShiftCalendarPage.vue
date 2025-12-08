@@ -55,7 +55,7 @@ const monthLabelParts = computed(() => ({
   year: dayjs(calendarValue.value).format('YYYY年'),
   month: dayjs(calendarValue.value).format('M月'),
 }));
-const weekdayNames = ['日', '月', '火', '水', '木', '金', '土'];
+const weekdayStrip = ['月', '火', '水', '木', '金', '土', '日'];
 const today = dayjs().format('YYYY-MM-DD');
 
 // さまざまな日付文字列を YYYY-MM-DD の正規化した形式に変換する
@@ -169,8 +169,6 @@ type CalendarSlotProps = {
   [key: string]: unknown;
 };
 
-const currentMonthIndex = computed(() => dayjs(calendarValue.value).month());
-
 // 表示用の年月日情報から YYYY-MM-DD 文字列を生成する
 const formatFromParts = (year: number, monthIndex: number, day: number): string => {
   const month = String(monthIndex + 1).padStart(2, '0');
@@ -191,15 +189,10 @@ const resolveDate = (slotProps: CalendarSlotProps): string => {
 // ShiftDayCell に渡すプロパティを構築する
 const buildCellProps = (slotProps: CalendarSlotProps) => {
   const date = resolveDate(slotProps);
-  const day = dayjs(date);
-  const weekdayIndex = day.day();
   return {
     date,
     shifts: getShiftsByDate(date),
     isToday: isToday(date),
-    weekdayLabel: weekdayNames[weekdayIndex],
-    showWeekdayLabel: day.month() === currentMonthIndex.value && day.date() <= 7,
-    isWeekend: weekdayIndex === 0 || weekdayIndex === 6,
   };
 };
 
@@ -278,6 +271,19 @@ const uiLocale = jaJP;
                       <button class="month-button today" type="button" @click="goToday">今日</button>
                       <button class="month-button" type="button" @click="goNextMonth">翌月</button>
                     </div>
+                  </div>
+                  <div class="weekday-strip">
+                    <span
+                      v-for="label in weekdayStrip"
+                      :key="label"
+                      class="weekday-strip__item"
+                      :class="{
+                        weekend: label === '土' || label === '日',
+                        sunday: label === '日'
+                      }"
+                    >
+                      {{ label }}
+                    </span>
                   </div>
                 </template>
                 <template #default="slotProps">
@@ -375,6 +381,25 @@ const uiLocale = jaJP;
   gap: 8px;
 }
 
+.weekday-strip {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  font-size: 12px;
+  color: var(--color-subtle);
+  padding: 0 8px;
+  margin-bottom: 6px;
+}
+
+.weekday-strip__item.weekend {
+  color: #dc2626;
+}
+
+.weekday-strip__item.sunday {
+  color: #dc2626;
+  font-weight: 600;
+}
+
 .month-button {
   border: 1px solid rgba(45, 101, 255, 0.3);
   background: #fff;
@@ -418,6 +443,8 @@ const uiLocale = jaJP;
   padding: 2px;
   height: 56px !important;
   min-height: 56px;
+  display: flex;
+  align-items: flex-start;
 }
 
 :deep(.day-cell) {

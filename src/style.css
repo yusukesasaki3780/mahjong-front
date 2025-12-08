@@ -76,6 +76,29 @@ a {
     padding-left: clamp(18px, 7vw, 36px);
     padding-right: clamp(12px, 6vw, 30px);
   }
+
+  /* Global override: make date-range picker vertical on narrow screens */
+  .n-date-panel.n-date-panel--daterange {
+    display: flex !important;
+    flex-direction: column !important;
+    min-width: 280px !important;
+  }
+
+  .n-date-panel.n-date-panel--daterange .n-date-panel__vertical-divider {
+    display: none !important;
+  }
+
+  .n-date-panel.n-date-panel--daterange .n-date-panel-calendar {
+    width: 100% !important;
+    border-left: none !important;
+    border-top: 1px solid rgba(0, 0, 0, 0.05);
+    margin-top: 8px;
+  }
+
+  .n-date-panel.n-date-panel--daterange .n-date-panel-calendar:first-of-type {
+    border-top: none;
+    margin-top: 0;
+  }
 }
 
 .n-card {

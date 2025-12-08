@@ -20,7 +20,7 @@ const message = useMessage();
 const router = useRouter();
 const userId = getStoredUserId();
 
-const selectedMonth = ref(Date.now());
+const selectedMonth = ref<string | null>(dayjs().format('YYYY-MM'));
 const loading = ref(false);
 const savingAdvance = ref(false);
 
@@ -36,10 +36,17 @@ const salaryDisplay = reactive({
 
 const advancePayment = ref(0);
 
-const formattedMonth = computed(() => dayjs(selectedMonth.value).format('YYYY-MM'));
+const activeYearMonth = computed(() => {
+  if (selectedMonth.value) {
+    return selectedMonth.value;
+  }
+  return dayjs().format('YYYY-MM');
+});
 
-const formatCurrency = (value?: number | null): string =>
-  `¥${Number(value ?? 0).toLocaleString('ja-JP')}`;
+const formatCurrency = (value?: number | null): string => {
+  const rounded = Math.round(Number(value ?? 0));
+  return `¥${rounded.toLocaleString('ja-JP')}`;
+};
 
 const fetchSalary = async (): Promise<void> => {
   if (!userId) {
@@ -48,7 +55,7 @@ const fetchSalary = async (): Promise<void> => {
   }
   loading.value = true;
   try {
-    const response = await getSalary(userId, formattedMonth.value);
+    const response = await getSalary(userId, activeYearMonth.value);
     salaryResponse.value = response;
     salaryDisplay.base = response.baseWageTotal ?? 0;
     salaryDisplay.nightExtra = response.nightExtraTotal ?? 0;
@@ -95,7 +102,7 @@ const handleSaveAdvance = async (): Promise<void> => {
   savingAdvance.value = true;
   try {
     const payload: AdvancePaymentResponse = { amount: Number(advancePayment.value ?? 0) };
-    await updateAdvancePayment(userId, formattedMonth.value, payload);
+    await updateAdvancePayment(userId, activeYearMonth.value, payload);
     message.success('前借額を保存しました');
   } catch (error) {
     const msg = isApiClientError(error) ? error.message : '前借額の保存に失敗しました';
@@ -111,7 +118,13 @@ const handleSaveAdvance = async (): Promise<void> => {
     <AppPageHeader title="給与計算" back-to="/dashboard" />
     <n-card class="controls-card">
       <div class="controls">
-        <n-date-picker v-model:value="selectedMonth" type="month" clearable />
+        <n-date-picker
+          v-model:formatted-value="selectedMonth"
+          type="month"
+          value-format="yyyy-MM"
+          format="yyyy-MM"
+          clearable
+        />
         <n-button type="primary" size="small" @click="fetchSalary">表示</n-button>
       </div>
       <p class="controls-hint">対象月を選択して表示してください。</p>

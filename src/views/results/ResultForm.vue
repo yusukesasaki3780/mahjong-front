@@ -4,6 +4,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
   NButton,
+  NButtonGroup,
   NCard,
   NForm,
   NFormItem,
@@ -77,6 +78,7 @@ const currentSanmaGameFee = computed(() => settings.value?.sanmaGameFee ?? 0);
 const currentSanmaGameFeeBack = computed(() => settings.value?.sanmaGameFeeBack ?? 0);
 const showSanmaGameFeeBack = computed(() => formValue.gameType === 'SANMA');
 const sanmaGameFeeBackDisplay = computed(() => (showSanmaGameFeeBack.value ? currentSanmaGameFeeBack.value : 0));
+const baseIncomeSign = ref<1 | -1>(1);
 
 const gameTypeOptions: SelectOption[] = [
   { label: '四麻', value: 'YONMA' },
@@ -91,9 +93,21 @@ const placeOptions = computed<SelectOption[]>(() => {
   });
 });
 
+const validateNotFutureDate = (_rule: unknown, value: number | null) => {
+  if (value == null) return Promise.resolve();
+  const picked = dayjs(value).startOf('day');
+  if (picked.isAfter(dayjs().startOf('day'))) {
+    return Promise.reject(new Error('未来の日付は登録できません'));
+  }
+  return Promise.resolve();
+};
+
 const rules: FormRules = {
   gameType: [{ required: true, message: '種別を選択してください', trigger: 'change' }],
-  playedAt: [{ required: true, type: 'number', message: '対局日を入力してください', trigger: 'change' }],
+  playedAt: [
+    { required: true, type: 'number', message: '対局日を入力してください', trigger: 'change' },
+    { validator: validateNotFutureDate, trigger: 'change' },
+  ],
   place: [{ required: true, type: 'number', message: '着順を入力してください', trigger: 'change' }],
   baseIncome: [{ required: true, type: 'number', message: 'ベース収入を入力してください', trigger: 'blur' }],
   tipCount: [{ required: true, type: 'number', message: 'チップ枚数を入力してください', trigger: 'blur' }],
@@ -174,6 +188,19 @@ const currentTipUnit = computed(() => {
 const tipIncomeDisplay = computed(() => formValue.tipIncome ?? 0);
 const totalIncomeDisplay = computed(() => formValue.totalIncome ?? 0);
 
+const baseIncomeInput = computed<number>({
+  get: () => Math.abs(formValue.baseIncome ?? 0),
+  set: (value) => {
+    const normalized = typeof value === 'number' && Number.isFinite(value) ? value : 0;
+    formValue.baseIncome = normalized * baseIncomeSign.value;
+  },
+});
+
+const setBaseIncomeSign = (sign: 1 | -1) => {
+  baseIncomeSign.value = sign;
+  formValue.baseIncome = Math.abs(formValue.baseIncome ?? 0) * sign;
+};
+
 const adjustTipCount = (delta: number) => {
   const current = Number(formValue.tipCount ?? 0);
   formValue.tipCount = current + delta;
@@ -186,6 +213,17 @@ watch(
     if (!formValue.place || formValue.place > max) {
       formValue.place = max;
     }
+  },
+  { immediate: true },
+);
+
+watch(
+  () => formValue.baseIncome,
+  (value) => {
+    if (value == null || value === 0) {
+      return;
+    }
+    baseIncomeSign.value = value >= 0 ? 1 : -1;
   },
   { immediate: true },
 );
@@ -318,20 +356,49 @@ const pageTitle = computed(() => (isEdit.value ? '成績を編集' : '成績を�
               <n-date-picker v-model:value="formValue.playedAt" type="date" />
             </n-form-item>
             <n-form-item label="着順" path="place">
-              <n-select v-model:value="formValue.place" :options="placeOptions" placeholder="着順を選択" />
+              <n-button-group size="small" class="place-button-group">
+                <n-button
+                  v-for="option in placeOptions"
+                  :key="option.value"
+                  :type="option.value === formValue.place ? 'primary' : 'default'"
+                  :ghost="option.value !== formValue.place"
+                  @click="formValue.place = option.value as number"
+                >
+                  {{ option.label }}
+                </n-button>
+              </n-button-group>
             </n-form-item>
           </section>
 
           <section class="form-section">
             <h3>収入情報</h3>
             <n-form-item label="ベース収入" path="baseIncome">
-              <n-input-number
-                v-model:value="formValue.baseIncome"
-                :show-button="false"
-                inputmode="decimal"
-                placeholder="例: 3400"
-                :max="10000000"
-              />
+              <div class="base-income-row">
+                <n-button-group size="small" class="income-sign-toggle">
+                  <n-button
+                    type="primary"
+                    :ghost="baseIncomeSign !== 1"
+                    @click="setBaseIncomeSign(1)"
+                  >
+                    ＋
+                  </n-button>
+                  <n-button
+                    type="primary"
+                    :ghost="baseIncomeSign !== -1"
+                    @click="setBaseIncomeSign(-1)"
+                  >
+                    －
+                  </n-button>
+                </n-button-group>
+                <n-input-number
+                  v-model:value="baseIncomeInput"
+                  :show-button="false"
+                  inputmode="numeric"
+                  placeholder="例: 3400"
+                  :max="10000000"
+                  :input-props="{ inputmode: 'numeric', pattern: '[0-9]*', type: 'tel' }"
+                />
+              </div>
             </n-form-item>
             <n-form-item label="チップ枚数" path="tipCount">
               <div class="tip-input-row">
@@ -414,6 +481,17 @@ const pageTitle = computed(() => (isEdit.value ? '成績を編集' : '成績を�
   margin-bottom: 16px;
 }
 
+.base-income-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.income-sign-toggle :deep(.n-button) {
+  min-width: 56px;
+  border-radius: 12px;
+}
+
 .tip-input-row {
   display: flex;
   gap: 12px;
@@ -457,6 +535,17 @@ const pageTitle = computed(() => (isEdit.value ? '成績を編集' : '成績を�
   color: #0f172a;
 }
 
+.place-button-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.place-button-group :deep(.n-button) {
+  flex: 1 1 calc(50% - 8px);
+  min-width: 110px;
+  border-radius: 999px;
+}
+
 .actions {
   display: flex;
   gap: 12px;
@@ -471,5 +560,37 @@ const pageTitle = computed(() => (isEdit.value ? '成績を編集' : '成績を�
 .action-btn {
   flex: 1;
   width: 100%;
+}
+
+@media (max-width: 420px) {
+  .base-income-row,
+  .tip-input-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .income-sign-toggle {
+    width: 100%;
+    display: flex;
+    gap: 8px;
+  }
+  .income-sign-toggle :deep(.n-button) {
+    flex: 1;
+    min-width: auto;
+  }
+
+  .tip-adjust-buttons {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .tip-adjust-buttons :deep(.n-button) {
+    flex: 1;
+    min-width: auto;
+  }
+
+  .place-button-group :deep(.n-button) {
+    flex: 1 1 100%;
+    min-width: auto;
+  }
 }
 </style>

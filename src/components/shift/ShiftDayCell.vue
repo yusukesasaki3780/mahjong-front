@@ -8,9 +8,6 @@ const props = defineProps<{
   date: string;
   shifts: Shift[];
   isToday?: boolean;
-  weekdayLabel?: string;
-  showWeekdayLabel?: boolean;
-  isWeekend?: boolean;
 }>();
 const emit = defineEmits<{ (e: 'select', payload: { date: string; shifts?: Shift[] }): void }>();
 
@@ -54,13 +51,6 @@ const handleClick = (): void => {
 <template>
   <div class="day-cell" :class="{ today: isToday }" @click="handleClick">
     <div class="day-number">
-      <small
-        v-if="showWeekdayLabel"
-        class="weekday-label"
-        :class="{ weekend: isWeekend }"
-      >
-        {{ weekdayLabel }}
-      </small>
       <n-badge v-if="hasShifts" dot type="success">
         <span>{{ dayNumber }}</span>
       </n-badge>
@@ -76,9 +66,10 @@ const handleClick = (): void => {
 
 <style scoped>
 .day-cell {
-  min-height: 80px;
+  min-height: 100%;
+  height: 100%;
   border-radius: 8px;
-  padding: 6px;
+  padding: 6px 4px 4px;
   cursor: pointer;
   transition: background-color 0.2s ease;
 }
@@ -93,30 +84,32 @@ const handleClick = (): void => {
 
 .day-number {
   font-weight: 600;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
   display: flex;
   flex-direction: column;
   gap: 2px;
-}
-
-.weekday-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: #475569;
-}
-
-.weekday-label.weekend {
-  color: #dc2626;
 }
 
 .shift-list {
   list-style: none;
   padding: 0;
   margin: 0;
-  font-size: 12px;
+  font-size: 11px;
   color: #475569;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  max-height: 34px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.shift-list li {
+  line-height: 1.1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: normal;
+  word-break: break-word;
+  width: 100%;
 }
 </style>

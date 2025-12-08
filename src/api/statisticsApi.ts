@@ -7,12 +7,13 @@ import type {
   YearlySummary,
   GameType,
   PlaceCounts,
+  PlaceCountsByType,
 } from '../types/statistics';
 import type { GameResultResponse, GameResult } from '../types/gameResult';
 
-export type RangePreset = '7d' | '30d' | '90d' | '1y';
+export type RangePreset = '7d' | '30d' | '90d' | '1y' | 'all';
 
-const rangeDays: Record<RangePreset, number> = {
+const rangeDays: Record<Exclude<RangePreset, 'all'>, number> = {
   '7d': 7,
   '30d': 30,
   '90d': 90,
@@ -23,15 +24,28 @@ const rangeDays: Record<RangePreset, number> = {
 const normalizeGameType = (value?: string): GameType =>
   value && value.toUpperCase() === 'SANMA' ? 'SANMA' : 'YONMA';
 
+const emptyPlaceCounts = (): PlaceCounts => ({ 1: 0, 2: 0, 3: 0, 4: 0 });
+
 // 着順ごとの出現数を集計する
-const buildPlaceCounts = (results: GameResult[]): PlaceCounts => {
-  const counts: PlaceCounts = { 1: 0, 2: 0, 3: 0, 4: 0 };
+const buildPlaceCounts = (
+  results: GameResult[],
+): { total: PlaceCounts; byType: PlaceCountsByType } => {
+  const total = emptyPlaceCounts();
+  const byType: PlaceCountsByType = {
+    YONMA: emptyPlaceCounts(),
+    SANMA: emptyPlaceCounts(),
+  };
+
   results.forEach((result) => {
-    if (result.place === 1 || result.place === 2 || result.place === 3 || result.place === 4) {
-      counts[result.place] += 1;
+    const place = result.place;
+    if (place === 1 || place === 2 || place === 3 || place === 4) {
+      total[place] += 1;
+      const type = normalizeGameType(result.gameType);
+      byType[type][place] += 1;
     }
   });
-  return counts;
+
+  return { total, byType };
 };
 
 // 収支推移グラフ用の配列を組み立てる
@@ -43,7 +57,10 @@ const buildDailyTrend = (results: GameResult[]): DailyTrendItem[] =>
   }));
 
 // プリセットに応じた検索期間（開始日・終了日）を算出する
-const buildRange = (preset: RangePreset): { start: string; end: string } => {
+const buildRange = (preset: RangePreset): { start: string; end: string } | null => {
+  if (preset === 'all') {
+    return null;
+  }
   const endDate = dayjs().startOf('day');
   const span = Math.max(rangeDays[preset] - 1, 0);
   const startDate = endDate.subtract(span, 'day');
@@ -60,12 +77,13 @@ export const getStatistics = async (preset: RangePreset): Promise<StatsResponse>
   if (!userId) {
     throw new Error('ユーザー情報が見つかりません。再ログインしてください。');
   }
-  const { start, end } = buildRange(preset);
+  const range = buildRange(preset);
+  const params = range ? { start: range.start, end: range.end } : undefined;
   const { data } = await apiClient.get<GameResultResponse>(`/users/${userId}/results`, {
-    params: { start, end },
+    params,
   });
 
-  const placeCounts = buildPlaceCounts(data.results);
+  const { total: placeCounts, byType: placeCountsByType } = buildPlaceCounts(data.results);
   const dailyTrend = buildDailyTrend(data.results);
   const totalIncome =
     typeof data.totalIncome === 'number'
@@ -77,6 +95,7 @@ export const getStatistics = async (preset: RangePreset): Promise<StatsResponse>
     totalGames,
     totalIncome,
     placeCounts,
+    placeCountsByType,
     dailyTrend,
   };
 };

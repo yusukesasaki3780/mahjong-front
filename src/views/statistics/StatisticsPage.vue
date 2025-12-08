@@ -1,22 +1,10 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
-import {
-  NCard,
-  NSpin,
-  NRadioGroup,
-  NRadioButton,
-  useNotification,
-} from 'naive-ui';
+import { NCard, NSpin, NRadioGroup, NRadioButton, useNotification } from 'naive-ui';
 import { use } from 'echarts/core';
 import { LineChart, PieChart, BarChart } from 'echarts/charts';
-import {
-  CanvasRenderer,
-} from 'echarts/renderers';
-import {
-  GridComponent,
-  LegendComponent,
-  TooltipComponent,
-} from 'echarts/components';
+import { CanvasRenderer } from 'echarts/renderers';
+import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components';
 import VChart from 'vue-echarts';
 import { useEchartsTheme } from '../../composables/useEchartsTheme';
 import {
@@ -26,7 +14,8 @@ import {
   buildYearlySummary,
   type RangePreset,
 } from '../../api/statisticsApi';
-import type { StatsResponse } from '../../types/statistics';
+import type { PlaceCounts, PlaceCountsByType, StatsResponse } from '../../types/statistics';
+import type { GameType } from '../../types/gameResult';
 import { isApiClientError } from '../../api/axios';
 import AppPageHeader from '../../components/common/AppPageHeader.vue';
 
@@ -35,12 +24,13 @@ use([GridComponent, LegendComponent, TooltipComponent, LineChart, PieChart, BarC
 const notification = useNotification();
 const { themedOption, getSeriesColor } = useEchartsTheme();
 
-const ranges: RangePreset[] = ['7d', '30d', '90d', '1y'];
+const ranges: RangePreset[] = ['7d', '30d', '90d', '1y', 'all'];
 const rangeLabels: Record<RangePreset, string> = {
   '7d': '7 days',
   '30d': '30 days',
   '90d': '90 days',
   '1y': '1 year',
+  all: '全期間',
 };
 
 const selectedRange = ref<RangePreset>('30d');
@@ -49,13 +39,40 @@ const stats = ref<StatsResponse | null>(null);
 const monthlySummary = ref(buildMonthlySummary([]));
 const yearlySummary = ref(buildYearlySummary([]));
 
-// 金額を日本円表記に整形する
-const formatCurrency = (value?: number | null): string => {
-  const amount = typeof value === 'number' ? value : 0;
-  return `¥${amount.toLocaleString('ja-JP')}`;
+const typeLabels: Record<GameType, string> = {
+  YONMA: '四麻',
+  SANMA: '三麻',
 };
 
-// 選択中の期間に応じて統計データを再取得する
+const formatCurrency = (value?: number | null): string =>
+  new Intl.NumberFormat('ja-JP', {
+    style: 'currency',
+    currency: 'JPY',
+    maximumFractionDigits: 0,
+  }).format(typeof value === 'number' ? value : 0);
+
+const totalFromCounts = (counts: PlaceCounts): number =>
+  (counts[1] ?? 0) + (counts[2] ?? 0) + (counts[3] ?? 0) + (counts[4] ?? 0);
+
+const formatAveragePlace = (counts: PlaceCounts): string => {
+  const total = totalFromCounts(counts);
+  if (!total) return '-';
+  const weighted =
+    (counts[1] ?? 0) * 1 + (counts[2] ?? 0) * 2 + (counts[3] ?? 0) * 3 + (counts[4] ?? 0) * 4;
+  return (weighted / total).toFixed(2);
+};
+
+const buildGameTypeSummary = (placeCountsByType: PlaceCountsByType) =>
+  (['YONMA', 'SANMA'] as const).map((type) => {
+    const counts = placeCountsByType[type];
+    return {
+      type,
+      label: typeLabels[type],
+      totalGames: totalFromCounts(counts),
+      averagePlace: formatAveragePlace(counts),
+    };
+  });
+
 const loadStats = async (): Promise<void> => {
   loading.value = true;
   try {
@@ -64,13 +81,9 @@ const loadStats = async (): Promise<void> => {
     monthlySummary.value = buildMonthlySummary(data.dailyTrend);
     yearlySummary.value = buildYearlySummary(data.dailyTrend);
   } catch (error) {
-    const fallbackMessage = 'データ取得に失敗しました。期間を再選択して再度お試しください。';
     const serverMessage = isApiClientError(error) ? error.message : '';
-    const content = serverMessage ? `${serverMessage}。期間を再選択して再度お試しください。` : fallbackMessage;
-    notification.error({
-      title: '統計ダッシュボード',
-      content,
-    });
+    const fallbackMessage = 'データの取得に失敗しました。期間を再選択して再度お試しください。';
+    notification.error({ title: '統計ダッシュボード', content: serverMessage || fallbackMessage });
   } finally {
     loading.value = false;
   }
@@ -80,12 +93,10 @@ onMounted(() => {
   loadStats().catch(() => undefined);
 });
 
-// 期間タブの変更を監視して即座に統計を再取得する
 watch(selectedRange, () => {
   loadStats().catch(() => undefined);
 });
 
-// 収支推移グラフ用のオプションを計算する
 const lineOption = computed(() => {
   if (!stats.value) return {};
   const grouped = groupTrendByGameType(stats.value.dailyTrend);
@@ -115,34 +126,26 @@ const lineOption = computed(() => {
   });
 });
 
-// 着順割合の円グラフオプションを計算する
-const pieOption = computed(() => {
-  if (!stats.value) return {};
-  const counts = stats.value.placeCounts;
-
-  return themedOption({
+const buildPieOption = (counts: PlaceCounts, title: string) =>
+  themedOption({
     tooltip: { trigger: 'item' },
-    legend: { bottom: 0 },
+    legend: { show: false },
     series: [
       {
-        name: '着順',
+        name: title,
         type: 'pie',
-        radius: ['30%', '70%'],
-        roseType: 'radius',
-        minAngle: 5,
+        radius: ['45%', '70%'],
+        avoidLabelOverlap: false,
+        itemStyle: {
+          borderColor: '#fff',
+          borderWidth: 2,
+        },
         label: {
           show: true,
-          position: 'inside',
           formatter: (params: { name: string; percent?: number }) => {
             const percent = params.percent ?? 0;
-            if (percent < 3) {
-              return '';
-            }
-            return `{b|${params.name}}\n{d|${percent.toFixed(1)}%}`;
-          },
-          rich: {
-            b: { fontSize: 12, fontWeight: 'bold', color: '#fff', lineHeight: 16 },
-            d: { fontSize: 14, color: '#fff', lineHeight: 18 },
+            if (percent < 3) return '';
+            return `${params.name} ${Math.round(percent)}%`;
           },
         },
         data: [
@@ -154,35 +157,52 @@ const pieOption = computed(() => {
       },
     ],
   });
+
+const pieOptions = computed(() => {
+  if (!stats.value) {
+    const emptyCounts: PlaceCounts = { 1: 0, 2: 0, 3: 0, 4: 0 };
+    return { yonma: buildPieOption(emptyCounts, '四麻'), sanma: buildPieOption(emptyCounts, '三麻') };
+  }
+  return {
+    yonma: buildPieOption(stats.value.placeCountsByType.YONMA, '四麻'),
+    sanma: buildPieOption(stats.value.placeCountsByType.SANMA, '三麻'),
+  };
 });
 
-// 月次サマリ棒グラフのオプションを構築する
-const monthlyOption = computed(() => themedOption({
-  tooltip: { trigger: 'axis' },
-  xAxis: { type: 'category', data: monthlySummary.value.map((m) => `${m.month}月`) },
-  yAxis: { type: 'value' },
-  series: [
-    {
-      type: 'bar',
-      data: monthlySummary.value.map((m) => m.income),
-      itemStyle: { color: getSeriesColor(2) },
-    },
-  ],
-}));
+const gameTypeSummary = computed(() => {
+  if (!stats.value) return [];
+  return buildGameTypeSummary(stats.value.placeCountsByType);
+});
 
-// 年次サマリ棒グラフのオプションを構築する
-const yearlyOption = computed(() => themedOption({
-  tooltip: { trigger: 'axis' },
-  xAxis: { type: 'category', data: yearlySummary.value.map((y) => y.year) },
-  yAxis: { type: 'value' },
-  series: [
-    {
-      type: 'bar',
-      data: yearlySummary.value.map((y) => y.income),
-      itemStyle: { color: getSeriesColor(3) },
-    },
-  ],
-}));
+const monthlyOption = computed(() =>
+  themedOption({
+    tooltip: { trigger: 'axis' },
+    xAxis: { type: 'category', data: monthlySummary.value.map((m) => `${m.month}月`) },
+    yAxis: { type: 'value' },
+    series: [
+      {
+        type: 'bar',
+        data: monthlySummary.value.map((m) => m.income),
+        itemStyle: { color: getSeriesColor(2) },
+      },
+    ],
+  }),
+);
+
+const yearlyOption = computed(() =>
+  themedOption({
+    tooltip: { trigger: 'axis' },
+    xAxis: { type: 'category', data: yearlySummary.value.map((y) => y.year) },
+    yAxis: { type: 'value' },
+    series: [
+      {
+        type: 'bar',
+        data: yearlySummary.value.map((y) => y.income),
+        itemStyle: { color: getSeriesColor(3) },
+      },
+    ],
+  }),
+);
 </script>
 
 <template>
@@ -203,12 +223,18 @@ const yearlyOption = computed(() => themedOption({
       <div v-if="stats" class="stats-stack">
         <n-card class="summary-card">
           <div class="summary-metrics">
-            <div class="metric">
-              <span>総対局数</span>
-              <strong>{{ stats.totalGames }}</strong>
+            <div
+              v-for="item in gameTypeSummary"
+              :key="item.type"
+              class="metric metric--type"
+            >
+              <span class="metric__label">総対局数（{{ item.label }}）</span>
+              <strong>{{ item.totalGames }}</strong>
+              <span class="metric__sub-label">平均着順</span>
+              <strong class="metric__sub-value">{{ item.averagePlace }}</strong>
             </div>
             <div class="metric">
-              <span>総収支</span>
+              <span class="metric__label">総収支</span>
               <strong>{{ formatCurrency(stats.totalIncome) }}</strong>
             </div>
           </div>
@@ -219,7 +245,16 @@ const yearlyOption = computed(() => themedOption({
         </n-card>
 
         <n-card class="chart-card" title="着順の割合">
-          <v-chart :option="pieOption" autoresize class="chart" />
+          <div class="pie-grid">
+            <div class="pie-panel">
+              <h4>四麻</h4>
+              <v-chart :option="pieOptions.yonma" autoresize class="pie-chart" />
+            </div>
+            <div class="pie-panel">
+              <h4>三麻</h4>
+              <v-chart :option="pieOptions.sanma" autoresize class="pie-chart" />
+            </div>
+          </div>
         </n-card>
 
         <n-card class="chart-card" title="月次サマリ">
@@ -278,6 +313,7 @@ const yearlyOption = computed(() => themedOption({
 .summary-metrics {
   display: flex;
   gap: 16px;
+  flex-wrap: wrap;
 }
 
 .metric {
@@ -285,6 +321,7 @@ const yearlyOption = computed(() => themedOption({
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 180px;
 }
 
 .metric span {
@@ -297,6 +334,28 @@ const yearlyOption = computed(() => themedOption({
   color: var(--color-brand);
 }
 
+.metric__label,
+.metric__sub-label,
+.metric__sub-value-title {
+  font-weight: 600;
+}
+
+.metric--type strong {
+  font-size: 20px;
+}
+
+.metric__sub-label {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.metric__sub-value {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--color-brand);
+  display: inline-block;
+}
+
 .chart-card {
   padding: 12px;
 }
@@ -304,6 +363,30 @@ const yearlyOption = computed(() => themedOption({
 .chart {
   width: 100%;
   height: 280px;
+}
+
+.pie-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.pie-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.pie-panel h4 {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-subtle);
+}
+
+.pie-chart {
+  width: 100%;
+  height: 260px;
 }
 
 .empty-card {
@@ -316,7 +399,8 @@ const yearlyOption = computed(() => themedOption({
   .summary-metrics {
     flex-direction: column;
   }
-  .chart {
+  .chart,
+  .pie-chart {
     height: 240px;
   }
 }
