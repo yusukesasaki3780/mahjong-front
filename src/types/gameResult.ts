@@ -9,6 +9,7 @@ export interface GameResult {
   baseIncome: number;
   tipCount: number;
   tipIncome: number;
+  otherIncome: number;
   totalIncome: number;
   note?: string;
   createdAt?: string;
@@ -22,6 +23,7 @@ export interface GameResultPayload {
   baseIncome: number;
   tipCount: number;
   tipIncome: number;
+  otherIncome: number;
   totalIncome: number;
   note?: string;
 }

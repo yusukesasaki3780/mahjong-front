@@ -14,6 +14,17 @@ export interface SalarySummary {
   incomeTax: number;
   netSalary: number;
   advanceAmount?: number;
+  specialAllowanceTotal?: number;
+  specialAllowances?: SpecialAllowance[];
+}
+
+export interface SpecialAllowance {
+  type: 'special_hourly_wage' | 'night_bonus' | string;
+  label: string;
+  unitPrice: number;
+  hours?: number;
+  amount: number;
+  specialHourlyWageId?: number | null;
 }
 
 // 給与詳細の API パスを生成する

@@ -18,6 +18,8 @@ export interface Shift {
   breakMinutes?: number;
   memo?: string;
   breaks?: ShiftBreak[];
+  specialHourlyWageId?: number | null;
+  specialWageId?: number | null;
   [key: string]: unknown;
 }
 
@@ -28,6 +30,8 @@ export interface CreateShiftPayload {
   breakMinutes?: number;
   memo?: string;
   breaks?: ShiftBreak[];
+  specialHourlyWageId?: number | null;
+  specialWageId?: number | null;
 }
 
 export type UpdateShiftPayload = Partial<CreateShiftPayload>;

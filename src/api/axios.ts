@@ -1,4 +1,5 @@
 ﻿import axios, { AxiosHeaders } from 'axios';
+import { authStore } from '../stores/auth';
 import type {
   AxiosError,
   AxiosInstance,
@@ -63,30 +64,48 @@ const clearAuthState = (): void => {
 
 const tokenStorage = {
   getAccessToken(): string | null {
+    if (authStore.accessToken) {
+      return authStore.accessToken;
+    }
     const state = readAuthState();
     if (state?.accessToken) {
+      authStore.setAccessToken(state.accessToken);
       return state.accessToken;
     }
-    return isBrowser ? window.localStorage.getItem(ACCESS_TOKEN_KEY) : null;
+    const local = isBrowser ? window.localStorage.getItem(ACCESS_TOKEN_KEY) : null;
+    if (local) {
+      authStore.setAccessToken(local);
+    }
+    return local;
   },
   setAccessToken(token: string): void {
     if (isBrowser) {
       window.localStorage.setItem(ACCESS_TOKEN_KEY, token);
     }
     writeAuthState({ accessToken: token });
+    authStore.setAccessToken(token);
   },
   getRefreshToken(): string | null {
+    if (authStore.refreshToken) {
+      return authStore.refreshToken;
+    }
     const state = readAuthState();
     if (state?.refreshToken) {
+      authStore.setRefreshToken(state.refreshToken);
       return state.refreshToken;
     }
-    return isBrowser ? window.localStorage.getItem(REFRESH_TOKEN_KEY) : null;
+    const local = isBrowser ? window.localStorage.getItem(REFRESH_TOKEN_KEY) : null;
+    if (local) {
+      authStore.setRefreshToken(local);
+    }
+    return local;
   },
   setRefreshToken(token: string): void {
     if (isBrowser) {
       window.localStorage.setItem(REFRESH_TOKEN_KEY, token);
     }
     writeAuthState({ refreshToken: token });
+    authStore.setRefreshToken(token);
   },
   clear(): void {
     if (isBrowser) {
@@ -94,23 +113,33 @@ const tokenStorage = {
       window.localStorage.removeItem(REFRESH_TOKEN_KEY);
     }
     clearAuthState();
+    authStore.clear();
   },
 };
 
 const userIdStorage = {
   getUserId(): string | null {
-    return isBrowser ? window.localStorage.getItem(USER_ID_KEY) : null;
+    if (authStore.userId) {
+      return authStore.userId;
+    }
+    const cached = isBrowser ? window.localStorage.getItem(USER_ID_KEY) : null;
+    if (cached) {
+      authStore.setUserId(cached);
+    }
+    return cached;
   },
   setUserId(userId: string): void {
     if (isBrowser) {
       window.localStorage.setItem(USER_ID_KEY, userId);
     }
     writeAuthState({ userId });
+    authStore.setUserId(userId);
   },
   clear(): void {
     if (isBrowser) {
       window.localStorage.removeItem(USER_ID_KEY);
     }
+    authStore.setUserId(null);
   },
 };
 

@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import {
   NButton,
   NDrawer,
@@ -9,6 +9,8 @@ import {
   NInput,
   NList,
   NListItem,
+  NRadio,
+  NRadioGroup,
   useNotification,
   type FormInst,
 } from 'naive-ui';
@@ -23,6 +25,7 @@ import {
 } from '../../api/shifts';
 import { getStoredUserId, isApiClientError } from '../../api/axios';
 import { extractErrorMessages } from '../../utils/validationMessages';
+import { getSpecialHourlyWages, type SpecialHourlyWage } from '../../api/specialWages';
 
 type BreakRange = { id: string; start: string; end: string };
 
@@ -40,6 +43,9 @@ const formRef = ref<FormInst | null>(null);
 const saving = ref(false);
 const editingShiftId = ref<string | null>(null);
 const existingBreakSummary = ref<number | null>(null);
+const specialWages = ref<SpecialHourlyWage[]>([]);
+const specialWagesLoading = ref(false);
+const SPECIAL_WAGE_NONE = null as unknown as number;
 const shiftFieldLabels = {
   date: '日付',
   startTime: '開始時間',
@@ -61,6 +67,7 @@ const form = reactive({
   breaks: [createBreakRange()] as BreakRange[],
   memo: '',
 });
+const selectedSpecialWageId = ref<number | null>(null);
 
 const resetForm = (): void => {
   editingShiftId.value = null;
@@ -69,6 +76,27 @@ const resetForm = (): void => {
   form.breaks.splice(0, form.breaks.length, createBreakRange());
   existingBreakSummary.value = null;
   form.memo = '';
+  selectedSpecialWageId.value = null;
+};
+
+const fetchSpecialWages = async (): Promise<void> => {
+  specialWagesLoading.value = true;
+  try {
+    specialWages.value = await getSpecialHourlyWages();
+    if (
+      selectedSpecialWageId.value !== null &&
+      !specialWages.value.some((item) => item.id === selectedSpecialWageId.value)
+    ) {
+      selectedSpecialWageId.value = null;
+    }
+  } catch (error) {
+    notification.error({
+      title: '特別手当',
+      content: isApiClientError(error) ? error.message : '特別手当の取得に失敗しました。',
+    });
+  } finally {
+    specialWagesLoading.value = false;
+  }
 };
 
 watch(
@@ -77,6 +105,10 @@ watch(
     resetForm();
   },
 );
+
+onMounted(() => {
+  fetchSpecialWages().catch(() => undefined);
+});
 
 const toInputTime = (value?: string): string => {
   if (!value) {
@@ -125,6 +157,11 @@ const selectShift = (shift: Shift): void => {
 
   existingBreakSummary.value = shift.breakMinutes ?? null;
   form.memo = shift.memo ?? '';
+  const incomingSpecialId =
+    (shift as Shift & { specialWageId?: number | null }).specialWageId ??
+    shift.specialHourlyWageId ??
+    null;
+  selectedSpecialWageId.value = typeof incomingSpecialId === 'number' ? incomingSpecialId : null;
 };
 
 const parseTimeToMinutes = (value: string): number | null => {
@@ -191,6 +228,8 @@ const buildPayload = (): CreateShiftPayload => {
     breakMinutes: totalBreakMinutes.value,
     memo: form.memo.trim() || undefined,
     breaks: breaks.length > 0 ? breaks : undefined,
+    specialHourlyWageId: selectedSpecialWageId.value ?? null,
+    specialWageId: selectedSpecialWageId.value ?? null,
   };
 };
 
@@ -227,6 +266,7 @@ const removeBreakRange = (id: string): void => {
     form.breaks.splice(index, 1);
   }
 };
+
 
 const handleSubmit = async (): Promise<void> => {
   if (!formRef.value || !props.date) {
@@ -374,6 +414,30 @@ const goBack = (): void => {
           <p class="break-total">総休憩: {{ totalBreakMinutes }} 分</p>
         </section>
 
+        <section class="special-wage-section">
+          <div class="special-wage-header">
+            <label>特別手当</label>
+            <n-button size="tiny" quaternary :loading="specialWagesLoading" @click="fetchSpecialWages">
+              再読み込み
+            </n-button>
+          </div>
+          <div v-if="specialWagesLoading" class="special-wage-hint">読み込み中です…</div>
+          <n-radio-group v-model:value="selectedSpecialWageId" name="special-wage">
+            <n-radio :value="SPECIAL_WAGE_NONE" class="special-wage-option">特別手当なし</n-radio>
+            <n-radio
+              v-for="wage in specialWages"
+              :key="wage.id"
+              :value="wage.id"
+              class="special-wage-option"
+            >
+              {{ wage.label }}（{{ wage.hourlyWage.toLocaleString() }}円）
+            </n-radio>
+          </n-radio-group>
+          <p v-if="!specialWagesLoading && !specialWages.length" class="special-wage-hint">
+            ゲーム設定から特別手当を追加するとここに表示されます。
+          </p>
+        </section>
+
         <n-form label-placement="top">
           <n-form-item label="メモ" path="memo">
             <n-input v-model:value="form.memo" type="textarea" rows="3" />
@@ -451,6 +515,32 @@ const goBack = (): void => {
 .break-summary {
   font-size: 12px;
   color: #475569;
+}
+
+.special-wage-section {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.special-wage-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.special-wage-option {
+  display: block;
+  margin-top: 6px;
+}
+
+.special-wage-hint {
+  font-size: 12px;
+  color: #64748b;
 }
 
 .empty {

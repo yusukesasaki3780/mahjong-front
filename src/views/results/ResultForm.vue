@@ -56,6 +56,7 @@ interface ResultFormState {
   baseIncome: number;
   tipCount: number;
   tipIncome: number;
+  otherIncome: number;
   totalIncome: number;
   note: string;
 }
@@ -67,6 +68,7 @@ const createInitialState = (): ResultFormState => ({
   baseIncome: 0,
   tipCount: 0,
   tipIncome: 0,
+  otherIncome: 0,
   totalIncome: 0,
   note: '',
 });
@@ -111,6 +113,16 @@ const rules: FormRules = {
   place: [{ required: true, type: 'number', message: '着順を入力してください', trigger: 'change' }],
   baseIncome: [{ required: true, type: 'number', message: 'ベース収入を入力してください', trigger: 'blur' }],
   tipCount: [{ required: true, type: 'number', message: 'チップ枚数を入力してください', trigger: 'blur' }],
+  otherIncome: [
+    {
+      type: 'number',
+      trigger: ['blur', 'change'],
+      validator: (_rule, value: number | null) => {
+        if (value == null) return Promise.resolve();
+        return value >= 0 ? Promise.resolve() : Promise.reject(new Error('その他収入は0以上で入力してください'));
+      },
+    },
+  ],
 };
 
 const notifyError = (error: unknown, fallback: string): void => {
@@ -128,6 +140,7 @@ const hydrateForm = (payload: Partial<ResultFormState>) => {
   formValue.baseIncome = coerceNumber(payload.baseIncome);
   formValue.tipCount = coerceNumber(payload.tipCount);
   formValue.tipIncome = coerceNumber(payload.tipIncome);
+  formValue.otherIncome = coerceNumber(payload.otherIncome);
   formValue.totalIncome = coerceNumber(payload.totalIncome);
   formValue.note = payload.note ?? '';
 };
@@ -238,8 +251,9 @@ watch([() => formValue.tipCount, currentTipUnit], recalcTipIncome, { immediate: 
 const recalcTotalIncome = () => {
   const baseValue = Number(formValue.baseIncome);
   const tipValue = Number(formValue.tipIncome);
+  const otherValue = Number(formValue.otherIncome);
   const place = Number(formValue.place ?? 0);
-  let total = baseValue + tipValue;
+  let total = baseValue + tipValue + otherValue;
 
   if (formValue.gameType === 'YONMA') {
     if (place === 1) {
@@ -259,6 +273,7 @@ watch(
   [
     () => formValue.baseIncome,
     () => formValue.tipIncome,
+    () => formValue.otherIncome,
     () => formValue.place,
     () => formValue.gameType,
     () => currentYonmaGameFee.value,
@@ -276,6 +291,7 @@ const toPayload = () => ({
   baseIncome: Number(formValue.baseIncome),
   tipCount: Number(formValue.tipCount),
   tipIncome: Number(formValue.tipIncome),
+  otherIncome: Number(formValue.otherIncome),
   totalIncome: Number(formValue.totalIncome),
   note: formValue.note.trim() ? formValue.note : undefined,
 });
@@ -423,6 +439,17 @@ const pageTitle = computed(() => (isEdit.value ? '成績を編集' : '成績を�
             </n-form-item>
             <n-form-item label="チップ収入">
               <div class="readonly-field">¥{{ tipIncomeDisplay.toLocaleString() }}</div>
+            </n-form-item>
+            <n-form-item label="その他収入" path="otherIncome">
+              <n-input-number
+                v-model:value="formValue.otherIncome"
+                :show-button="false"
+                inputmode="numeric"
+                placeholder="例: 1500"
+                :max="10000000"
+                :min="0"
+                :input-props="{ inputmode: 'numeric', pattern: '[0-9]*', type: 'tel' }"
+              />
             </n-form-item>
             <n-form-item v-if="showSanmaGameFeeBack" label="ゲーム代バック">
               <div class="readonly-field">¥{{ sanmaGameFeeBackDisplay.toLocaleString() }}</div>

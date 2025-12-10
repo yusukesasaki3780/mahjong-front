@@ -8,11 +8,19 @@ import {
   NForm,
   NFormItem,
   NInputNumber,
+  NList,
+  NListItem,
   NSkeleton,
   useMessage,
 } from 'naive-ui';
 import dayjs from 'dayjs';
-import { getSalary, updateAdvancePayment, type AdvancePaymentResponse, type SalarySummary } from '../../api/salary';
+import {
+  getSalary,
+  updateAdvancePayment,
+  type AdvancePaymentResponse,
+  type SalarySummary,
+  type SpecialAllowance,
+} from '../../api/salary';
 import { getStoredUserId, isApiClientError } from '../../api/axios';
 import AppPageHeader from '../../components/common/AppPageHeader.vue';
 
@@ -35,6 +43,24 @@ const salaryDisplay = reactive({
 });
 
 const advancePayment = ref(0);
+const specialAllowanceSummary = ref(0);
+const specialAllowances = computed<SpecialAllowance[]>(() => salaryResponse.value?.specialAllowances ?? []);
+const specialAllowanceTotal = computed(() =>
+  specialAllowances.value.reduce((sum, item) => sum + (item.amount ?? 0), 0),
+);
+const nightBonus = computed(() => specialAllowances.value.find((item) => item.type === 'night_bonus') ?? null);
+const nightBonusHours = computed(() => nightBonus.value?.hours ?? 0);
+
+const formatHours = (value?: number | null): string => Number(value ?? 0).toFixed(1);
+
+const formatAllowanceMeta = (item: SpecialAllowance): string => {
+  const unit = item.unitPrice ?? 0;
+  const hours = item.hours ?? null;
+  if (hours != null) {
+    return `単価 ${unit.toLocaleString('ja-JP')}円 × ${formatHours(hours)}時間`;
+  }
+  return `単価 ${unit.toLocaleString('ja-JP')}円`;
+};
 
 const activeYearMonth = computed(() => {
   if (selectedMonth.value) {
@@ -64,6 +90,7 @@ const fetchSalary = async (): Promise<void> => {
     salaryDisplay.deduction = response.incomeTax ?? 0;
     salaryDisplay.netAfterTax = response.netSalary ?? 0;
     advancePayment.value = response.advanceAmount ?? 0;
+    specialAllowanceSummary.value = response.specialAllowanceTotal ?? 0;
   } catch (error) {
     const msg = isApiClientError(error) ? error.message : '給与情報の取得に失敗しました';
     message.error(msg);
@@ -87,6 +114,7 @@ const totalPay = computed(() => {
 const statItems = computed(() => [
   { label: '基本給', value: formatCurrency(salaryDisplay.base) },
   { label: '深夜給', value: formatCurrency(salaryDisplay.nightExtra) },
+  { label: '特別手当', value: formatCurrency(specialAllowanceSummary.value) },
   { label: '交通費', value: formatCurrency(salaryDisplay.transport) },
   { label: 'アウト', value: formatCurrency(salaryDisplay.out) },
   { label: '控除', value: formatCurrency(salaryDisplay.deduction) },
@@ -133,18 +161,46 @@ const handleSaveAdvance = async (): Promise<void> => {
     <n-skeleton v-if="loading" text :repeat="4" />
 
     <template v-else>
-      <n-card v-if="salaryResponse" class="summary-card">
-        <div class="summary-header">
-          <span>対象年月</span>
-          <strong>{{ salaryResponse.yearMonth }}</strong>
-        </div>
-        <div class="stat-grid">
-          <div class="stat-item" v-for="item in statItems" :key="item.label">
-            <span>{{ item.label }}</span>
-            <strong>{{ item.value }}</strong>
+      <template v-if="salaryResponse">
+        <n-card class="summary-card">
+          <div class="summary-header">
+            <span>対象年月</span>
+            <strong>{{ salaryResponse.yearMonth }}</strong>
           </div>
-        </div>
-      </n-card>
+          <div class="stat-grid">
+            <div class="stat-item" v-for="item in statItems" :key="item.label">
+              <span>{{ item.label }}</span>
+              <strong>{{ item.value }}</strong>
+            </div>
+          </div>
+        </n-card>
+        <n-card v-if="specialAllowances.length" class="special-card">
+          <div class="special-card__header">
+            <h3>特別手当</h3>
+            <span class="total-label">合計 {{ formatCurrency(specialAllowanceTotal) }}</span>
+          </div>
+          <div v-if="nightBonus" class="night-highlight">
+            特別時給シフト深夜時間：
+            <strong>{{ formatHours(nightBonusHours) }} 時間</strong>
+          </div>
+          <n-list>
+            <n-list-item
+              v-for="item in specialAllowances"
+              :key="item.specialHourlyWageId ?? item.label"
+              class="special-item"
+              :class="{ 'special-item--night': item.type === 'night_bonus' }"
+            >
+              <div>
+                <strong>{{ item.label }}</strong>
+                <p v-if="formatAllowanceMeta(item)" class="special-meta">
+                  {{ formatAllowanceMeta(item) }}
+                </p>
+              </div>
+              <span class="special-amount">{{ formatCurrency(item.amount) }}</span>
+            </n-list-item>
+          </n-list>
+        </n-card>
+      </template>
       <n-card v-else class="empty-card">表示できる給与情報がありません。</n-card>
 
       <n-card class="advance-card" title="前借額（控除対象）">
@@ -197,6 +253,65 @@ const handleSaveAdvance = async (): Promise<void> => {
 
 .summary-card {
   padding: 16px;
+}
+
+.special-card {
+  padding: 16px;
+}
+
+.special-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.special-card__header h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.total-label {
+  font-weight: 600;
+}
+
+.night-highlight {
+  background: #fff8e6;
+  border: 1px solid #ffe1a5;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.night-highlight strong {
+  font-size: 14px;
+}
+
+.special-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.special-item--night {
+  background: #fff9e6;
+  border-color: #ffe0a6;
+}
+
+.special-meta {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--color-subtle);
+}
+
+.special-amount {
+  font-weight: 700;
+  color: var(--color-text);
 }
 
 .summary-header {
