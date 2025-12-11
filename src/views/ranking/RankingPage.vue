@@ -172,7 +172,10 @@ const formatPlaceLabel = (rank: number): string => `${rank}位`;
           </div>
           <div class="ranking-info">
             <div class="info-header">
-              <h3>{{ item.name }}</h3>
+              <h3>
+                {{ item.name }}
+                <span v-if="item.zooId" class="zoo-id">（ID{{ item.zooId }}）</span>
+              </h3>
               <span class="games">対局数: {{ item.gameCount ?? '-' }}</span>
             </div>
             <p class="meta">
@@ -250,6 +253,12 @@ const formatPlaceLabel = (rank: number): string => `${rank}位`;
   margin: 0;
   font-size: 16px;
   font-weight: 600;
+}
+
+.ranking-info .zoo-id {
+  font-size: 14px;
+  font-weight: 500;
+  color: #475569;
 }
 
 .games {

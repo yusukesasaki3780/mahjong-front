@@ -3,6 +3,7 @@
 export interface RankingItem {
   userId: number;
   name: string;
+  zooId?: number | null;
   totalIncome: number;
   gameCount: number;
   averagePlace: number | null;

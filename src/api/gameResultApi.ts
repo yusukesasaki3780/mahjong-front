@@ -12,6 +12,20 @@ import type {
 const basePath = (userId: string): string => `/users/${userId}/results`;
 // 成績詳細 API のパスを生成する
 const detailPath = (userId: string, resultId: string): string => `${basePath(userId)}/${resultId}`;
+// まとめて簡単入力 API のパス
+const simpleBatchPath = (userId: string): string => `${basePath(userId)}/simple-batch`;
+
+export interface SimpleBatchStartPayload {
+  storeId: number;
+  playedAt: string;
+}
+
+export interface SimpleBatchStartResponse {
+  simpleBatchId: string;
+  storeId: number;
+  storeName?: string;
+  playedAt: string;
+}
 
 // YYYY-MM 形式から月初〜月末の検索期間を算出する
 const buildMonthRangeFromYearMonth = (yearMonth: string): { startDate: string; endDate: string } => {
@@ -71,6 +85,24 @@ export const createGameResult = async (
   payload: GameResultPayload,
 ): Promise<GameResult> => {
   const { data } = await apiClient.post<GameResult>(basePath(userId), payload);
+  return data;
+};
+
+export const startSimpleBatch = async (
+  userId: string,
+  payload: SimpleBatchStartPayload,
+): Promise<SimpleBatchStartResponse> => {
+  const { data } = await apiClient.post<SimpleBatchStartResponse>(`${simpleBatchPath(userId)}/start`, payload);
+  return data;
+};
+
+export const deleteSimpleBatch = async (
+  userId: string,
+  simpleBatchId: string,
+): Promise<{ deletedCount: number }> => {
+  const { data } = await apiClient.delete<{ deletedCount: number }>(
+    `${simpleBatchPath(userId)}/${simpleBatchId}`,
+  );
   return data;
 };
 

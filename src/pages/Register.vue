@@ -28,7 +28,8 @@ const errorMessages = ref<string[]>([]);
 const formValue = reactive({
   name: '',
   nickname: '',
-  storeName: '',
+  zooId: '',
+  storeId: null as number | null,
   prefectureCode: '',
   email: '',
   password: '',
@@ -39,7 +40,8 @@ const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const registerFieldLabels = {
   name: '氏名',
   nickname: 'ニックネーム',
-  storeName: '店舗',
+  zooId: 'zooID',
+  storeId: '店舗',
   prefectureCode: '都道府県',
   email: 'メールアドレス',
   password: 'パスワード',
@@ -49,7 +51,26 @@ const registerFieldLabels = {
 const rules: FormRules = {
   name: [{ required: true, message: '氏名を入力してください', trigger: 'blur' }],
   nickname: [{ required: true, message: 'ニックネームを入力してください', trigger: 'blur' }],
-  storeName: [{ required: true, message: '店舗を選択してください', trigger: 'change' }],
+  zooId: [
+    { required: true, message: 'zooIDを入力してください', trigger: 'blur' },
+    {
+      validator: (_rule, value: string) => {
+        if (!value?.length) {
+          return Promise.reject(new Error('zooIDを入力してください'));
+        }
+        if (!/^[0-9]+$/.test(value)) {
+          return Promise.reject(new Error('数字のみ入力可能です'));
+        }
+        const numeric = Number(value);
+        if (numeric < 1 || numeric > 999999) {
+          return Promise.reject(new Error('1〜999999の範囲で入力してください'));
+        }
+        return Promise.resolve();
+      },
+      trigger: ['blur', 'input'],
+    },
+  ],
+  storeId: [{ required: true, message: '店舗を選択してください', trigger: 'change' }],
   prefectureCode: [{ required: true, message: '都道府県を選択してください', trigger: 'change' }],
   email: [
     { required: true, message: 'メールアドレスを入力してください', trigger: ['blur', 'input'] },
@@ -81,7 +102,7 @@ const setErrorMessages = (error: unknown, fallback: string): void => {
 const fetchStores = async (): Promise<void> => {
   try {
     const { data } = await apiClient.get<Array<{ id: number; storeName: string }>>('/stores');
-    storeOptions.value = data.map((store) => ({ label: store.storeName, value: store.storeName }));
+    storeOptions.value = data.map((store) => ({ label: store.storeName, value: store.id }));
   } catch (error) {
     setErrorMessages(error, '店舗リストの取得に失敗しました。');
   }
@@ -106,7 +127,8 @@ const handleSubmit = async (): Promise<void> => {
     await apiClient.post('/register', {
       name: formValue.name,
       nickname: formValue.nickname,
-      storeName: formValue.storeName,
+      zooId: Number(formValue.zooId),
+      storeId: formValue.storeId,
       prefectureCode: formValue.prefectureCode,
       email: formValue.email,
       password: formValue.password,
@@ -136,9 +158,19 @@ const handleSubmit = async (): Promise<void> => {
           <n-input v-model:value="formValue.nickname" placeholder="ニックネーム" />
         </n-form-item>
 
-        <n-form-item label="店舗" path="storeName">
+        <n-form-item label="Zoo ID" path="zooId">
+          <n-input
+            v-model:value="formValue.zooId"
+            placeholder="数字のみ"
+            inputmode="numeric"
+            type="text"
+            maxlength="6"
+          />
+        </n-form-item>
+
+        <n-form-item label="店舗" path="storeId">
           <n-select
-            v-model:value="formValue.storeName"
+            v-model:value="formValue.storeId"
             :options="storeOptions"
             placeholder="店舗を選択"
           />

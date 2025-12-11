@@ -12,6 +12,7 @@ export interface RankingQueryParams {
 interface RankingApiResponseItem {
   userId: number;
   name: string;
+  zooId?: number | null;
   totalIncome: number;
   gameCount: number;
   averagePlace: number | null;
@@ -22,6 +23,7 @@ const normalizeRanking = (items: RankingApiResponseItem[]): RankingItem[] =>
   items.map((item) => ({
     userId: item.userId,
     name: item.name,
+    zooId: item.zooId,
     totalIncome: item.totalIncome,
     gameCount: item.gameCount,
     averagePlace: item.averagePlace,

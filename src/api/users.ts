@@ -4,6 +4,7 @@ export interface UserProfile {
   id: string;
   name: string;
   email: string;
+  zooId?: number;
   role?: string;
   avatarUrl?: string;
   createdAt?: string;

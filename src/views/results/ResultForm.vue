@@ -1,11 +1,12 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import dayjs from 'dayjs';
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
   NButton,
   NButtonGroup,
   NCard,
+  NDatePicker,
   NForm,
   NFormItem,
   NInput,
@@ -19,16 +20,13 @@ import {
   type FormRules,
   type SelectOption,
 } from 'naive-ui';
-import {
-  createGameResult,
-  deleteGameResult,
-  getGameResult,
-  updateGameResult,
-} from '../../api/gameResultApi';
+import { createGameResult, deleteGameResult, getGameResult, updateGameResult } from '../../api/gameResultApi';
 import { getStoredUserId, isApiClientError } from '../../api/axios';
 import type { GameType } from '../../types/gameResult';
 import { getGameSettings, type GameSettings } from '../../api/gameSettingsApi';
 import AppPageHeader from '../../components/common/AppPageHeader.vue';
+import SimpleBatchPanel from '../../components/results/SimpleBatchPanel.vue';
+import { SIMPLE_BATCH_STATE_EVENT, SIMPLE_BATCH_STORAGE_KEY } from '../../constants/simpleBatch';
 
 const route = useRoute();
 const router = useRouter();
@@ -81,24 +79,121 @@ const currentSanmaGameFeeBack = computed(() => settings.value?.sanmaGameFeeBack 
 const showSanmaGameFeeBack = computed(() => formValue.gameType === 'SANMA');
 const sanmaGameFeeBackDisplay = computed(() => (showSanmaGameFeeBack.value ? currentSanmaGameFeeBack.value : 0));
 const baseIncomeSign = ref<1 | -1>(1);
+const tipIncomeSign = ref<1 | -1>(1);
+const isSimpleBatchMode = ref(false);
+let cleanupSimpleBatchListeners: (() => void) | null = null;
+
+const readSimpleBatchState = (): boolean => {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  const raw = window.localStorage.getItem(SIMPLE_BATCH_STORAGE_KEY);
+  if (!raw) {
+    return false;
+  }
+  try {
+    const parsed = JSON.parse(raw) as { simpleBatchId?: string | null };
+    return Boolean(parsed?.simpleBatchId);
+  } catch {
+    return false;
+  }
+};
+
+const syncSimpleBatchMode = () => {
+  isSimpleBatchMode.value = readSimpleBatchState();
+};
+
+const setupSimpleBatchListeners = () => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  const handleChange = () => syncSimpleBatchMode();
+  window.addEventListener(SIMPLE_BATCH_STATE_EVENT, handleChange);
+  window.addEventListener('storage', handleChange);
+  cleanupSimpleBatchListeners = () => {
+    window.removeEventListener(SIMPLE_BATCH_STATE_EVENT, handleChange);
+    window.removeEventListener('storage', handleChange);
+  };
+};
 
 const gameTypeOptions: SelectOption[] = [
   { label: '四麻', value: 'YONMA' },
   { label: '三麻', value: 'SANMA' },
 ];
 
-const placeOptions = computed<SelectOption[]>(() => {
-  const max = formValue.gameType === 'SANMA' ? 3 : 4;
+const getMaxPlaceForGameType = (gameType: GameType): number => (gameType === 'SANMA' ? 3 : 4);
+
+const ensurePlaceInRange = (gameType: GameType, place?: number): number => {
+  const max = getMaxPlaceForGameType(gameType);
+  if (!place || place < 1) {
+    return 1;
+  }
+  return Math.min(place, max);
+};
+
+const buildPlaceOptions = (gameType: GameType): SelectOption[] => {
+  const max = getMaxPlaceForGameType(gameType);
   return Array.from({ length: max }, (_, index) => {
     const value = index + 1;
     return { label: `${value}位`, value };
   });
-});
+};
+
+const placeOptions = computed<SelectOption[]>(() => buildPlaceOptions(formValue.gameType));
+
+const getTipUnitByType = (gameType: GameType): number => {
+  if (gameType === 'SANMA') {
+    return settings.value?.sanmaTipUnit ?? 500;
+  }
+  return settings.value?.yonmaTipUnit ?? 500;
+};
+
+const calculateTotalIncome = ({
+  gameType,
+  baseIncome,
+  tipIncome,
+  otherIncome,
+  place,
+}: {
+  gameType: GameType;
+  baseIncome: number;
+  tipIncome: number;
+  otherIncome: number;
+  place: number;
+}): number => {
+  let total = baseIncome + tipIncome + otherIncome;
+
+  if (gameType === 'YONMA') {
+    if (place === 1) {
+      total -= currentYonmaGameFee.value;
+    }
+  } else if (gameType === 'SANMA') {
+    if (place === 1) {
+      total -= currentSanmaGameFee.value;
+    }
+    total += currentSanmaGameFeeBack.value;
+  }
+
+  return total;
+};
+
+const formatYen = (value?: number | null): string => {
+  const amount = typeof value === 'number' ? value : 0;
+  const sign = amount < 0 ? '-' : '';
+  return `${sign}¥${Math.abs(amount).toLocaleString('ja-JP')}`;
+};
+
+const isFutureDate = (value: number | null): boolean => {
+  if (value == null) {
+    return false;
+  }
+  const picked = dayjs(value).startOf('day');
+  return picked.isAfter(dayjs().startOf('day'));
+};
 
 const validateNotFutureDate = (_rule: unknown, value: number | null) => {
   if (value == null) return Promise.resolve();
-  const picked = dayjs(value).startOf('day');
-  if (picked.isAfter(dayjs().startOf('day'))) {
+  if (isFutureDate(value)) {
     return Promise.reject(new Error('未来の日付は登録できません'));
   }
   return Promise.resolve();
@@ -112,7 +207,18 @@ const rules: FormRules = {
   ],
   place: [{ required: true, type: 'number', message: '着順を入力してください', trigger: 'change' }],
   baseIncome: [{ required: true, type: 'number', message: 'ベース収入を入力してください', trigger: 'blur' }],
-  tipCount: [{ required: true, type: 'number', message: 'チップ枚数を入力してください', trigger: 'blur' }],
+  tipCount: [
+    { required: true, message: 'チップ枚数を入力してください', trigger: 'blur' },
+    {
+      trigger: ['blur', 'change'],
+      validator: (_rule, value: number | null) => {
+        if (value === null || value === undefined) {
+          return Promise.reject(new Error('チップ枚数は数値で入力してください'));
+        }
+        return Number.isFinite(value) ? Promise.resolve() : Promise.reject(new Error('チップ枚数は数値で入力してください'));
+      },
+    },
+  ],
   otherIncome: [
     {
       type: 'number',
@@ -139,7 +245,9 @@ const hydrateForm = (payload: Partial<ResultFormState>) => {
   formValue.place = coerceNumber(payload.place, formValue.place);
   formValue.baseIncome = coerceNumber(payload.baseIncome);
   formValue.tipCount = coerceNumber(payload.tipCount);
-  formValue.tipIncome = coerceNumber(payload.tipIncome);
+  const hydratedTipIncome = coerceNumber(payload.tipIncome);
+  tipIncomeSign.value = hydratedTipIncome < 0 ? -1 : 1;
+  formValue.tipIncome = hydratedTipIncome;
   formValue.otherIncome = coerceNumber(payload.otherIncome);
   formValue.totalIncome = coerceNumber(payload.totalIncome);
   formValue.note = payload.note ?? '';
@@ -152,6 +260,11 @@ const fetchDetail = async (): Promise<void> => {
   loading.value = true;
   try {
     const result = await getGameResult(userId, resultId.value);
+    if (result.isFinalRecord) {
+      message.error('この成績は編集できません。');
+      router.push('/results');
+      return;
+    }
     hydrateForm({
       gameType: result.gameType,
       playedAt: dayjs(result.playedAt).valueOf(),
@@ -159,6 +272,7 @@ const fetchDetail = async (): Promise<void> => {
       baseIncome: result.baseIncome ?? undefined,
       tipCount: result.tipCount ?? undefined,
       tipIncome: result.tipIncome ?? undefined,
+      otherIncome: result.otherIncome ?? undefined,
       totalIncome: result.totalIncome ?? undefined,
       note: result.note ?? '',
     });
@@ -177,7 +291,7 @@ const fetchSettings = async (): Promise<void> => {
   try {
     settings.value = await getGameSettings(userId);
   } catch (error) {
-    notifyError(error, 'ゲーム設定の取得に失敗しました（デフォルト単価を使用します）');
+    notifyError(error, 'ゲーム設定の取得に失敗しました。デフォルト単価を使用します');
     settings.value = null;
   } finally {
     loadingSettings.value = false;
@@ -191,13 +305,16 @@ onMounted(() => {
   }
 });
 
-const currentTipUnit = computed(() => {
-  if (formValue.gameType === 'SANMA') {
-    return settings.value?.sanmaTipUnit ?? 500;
-  }
-  return settings.value?.yonmaTipUnit ?? 500;
+onMounted(() => {
+  syncSimpleBatchMode();
+  setupSimpleBatchListeners();
 });
 
+onBeforeUnmount(() => {
+  cleanupSimpleBatchListeners?.();
+});
+
+const currentTipUnit = computed(() => getTipUnitByType(formValue.gameType));
 const tipIncomeDisplay = computed(() => formValue.tipIncome ?? 0);
 const totalIncomeDisplay = computed(() => formValue.totalIncome ?? 0);
 
@@ -214,18 +331,23 @@ const setBaseIncomeSign = (sign: 1 | -1) => {
   formValue.baseIncome = Math.abs(formValue.baseIncome ?? 0) * sign;
 };
 
+const setTipIncomeSign = (sign: 1 | -1) => {
+  if (tipIncomeSign.value === sign) {
+    return;
+  }
+  tipIncomeSign.value = sign;
+  recalcTipIncome();
+};
+
 const adjustTipCount = (delta: number) => {
   const current = Number(formValue.tipCount ?? 0);
-  formValue.tipCount = current + delta;
+  formValue.tipCount = (Number.isFinite(current) ? current : 0) + delta;
 };
 
 watch(
   () => formValue.gameType,
-  () => {
-    const max = formValue.gameType === 'SANMA' ? 3 : 4;
-    if (!formValue.place || formValue.place > max) {
-      formValue.place = max;
-    }
+  (value) => {
+    formValue.place = ensurePlaceInRange(value, formValue.place);
   },
   { immediate: true },
 );
@@ -242,31 +364,21 @@ watch(
 );
 
 const recalcTipIncome = () => {
-  const count = formValue.tipCount;
-  formValue.tipIncome = count * (currentTipUnit.value ?? 0);
+  const numeric = Number(formValue.tipCount ?? 0);
+  const count = Number.isFinite(numeric) ? numeric : 0;
+  formValue.tipIncome = count * currentTipUnit.value * tipIncomeSign.value;
 };
 
-watch([() => formValue.tipCount, currentTipUnit], recalcTipIncome, { immediate: true });
+watch([() => formValue.tipCount, currentTipUnit, () => tipIncomeSign.value], recalcTipIncome, { immediate: true });
 
 const recalcTotalIncome = () => {
-  const baseValue = Number(formValue.baseIncome);
-  const tipValue = Number(formValue.tipIncome);
-  const otherValue = Number(formValue.otherIncome);
-  const place = Number(formValue.place ?? 0);
-  let total = baseValue + tipValue + otherValue;
-
-  if (formValue.gameType === 'YONMA') {
-    if (place === 1) {
-      total -= currentYonmaGameFee.value;
-    }
-  } else if (formValue.gameType === 'SANMA') {
-    if (place === 1) {
-      total -= currentSanmaGameFee.value;
-    }
-    total += currentSanmaGameFeeBack.value;
-  }
-
-  formValue.totalIncome = total;
+  formValue.totalIncome = calculateTotalIncome({
+    gameType: formValue.gameType,
+    baseIncome: Number(formValue.baseIncome ?? 0),
+    tipIncome: Number(formValue.tipIncome ?? 0),
+    otherIncome: Number(formValue.otherIncome ?? 0),
+    place: Number(formValue.place ?? 1),
+  });
 };
 
 watch(
@@ -289,7 +401,7 @@ const toPayload = () => ({
   playedAt: dayjs(formValue.playedAt ?? dayjs().valueOf()).format('YYYY-MM-DD'),
   place: Number(formValue.place ?? 1),
   baseIncome: Number(formValue.baseIncome),
-  tipCount: Number(formValue.tipCount),
+  tipCount: Number(formValue.tipCount ?? 0),
   tipIncome: Number(formValue.tipIncome),
   otherIncome: Number(formValue.otherIncome),
   totalIncome: Number(formValue.totalIncome),
@@ -353,7 +465,9 @@ const pageTitle = computed(() => (isEdit.value ? '成績を編集' : '成績を�
 <template>
   <div class="result-form-page app-page">
     <AppPageHeader :title="pageTitle" back-to="/results" />
-    <n-card class="form-card">
+    <SimpleBatchPanel />
+
+    <n-card v-if="!isSimpleBatchMode" class="form-card">
       <n-spin :show="loading || loadingSettings">
         <n-form
           ref="formRef"
@@ -396,14 +510,14 @@ const pageTitle = computed(() => (isEdit.value ? '成績を編集' : '成績を�
                     :ghost="baseIncomeSign !== 1"
                     @click="setBaseIncomeSign(1)"
                   >
-                    ＋
+                    プラス
                   </n-button>
                   <n-button
                     type="primary"
                     :ghost="baseIncomeSign !== -1"
                     @click="setBaseIncomeSign(-1)"
                   >
-                    －
+                    マイナス
                   </n-button>
                 </n-button-group>
                 <n-input-number
@@ -423,7 +537,6 @@ const pageTitle = computed(() => (isEdit.value ? '成績を編集' : '成績を�
                   :show-button="false"
                   inputmode="numeric"
                   placeholder="例: 5"
-                  :min="0"
                 />
                 <div class="tip-adjust-buttons">
                   <n-button size="small" @click="adjustTipCount(-5)">-5</n-button>
@@ -433,12 +546,30 @@ const pageTitle = computed(() => (isEdit.value ? '成績を編集' : '成績を�
                 </div>
               </div>
               <p class="tip-unit">
-                単価: ¥{{ currentTipUnit.toFixed(0) }} / 枚
-                <span v-if="loadingSettings" class="tip-unit__loading">（設定を読み込み中…）</span>
+                単価: {{ currentTipUnit.toFixed(0) }} / 枚
+                <span v-if="loadingSettings" class="tip-unit__loading">設定を読み込み中...</span>
               </p>
             </n-form-item>
             <n-form-item label="チップ収入">
-              <div class="readonly-field">¥{{ tipIncomeDisplay.toLocaleString() }}</div>
+              <div class="chip-income-row">
+                <n-button-group size="small" class="income-sign-toggle">
+                  <n-button
+                    type="primary"
+                    :ghost="tipIncomeSign !== 1"
+                    @click="setTipIncomeSign(1)"
+                  >
+                    プラス
+                  </n-button>
+                  <n-button
+                    type="primary"
+                    :ghost="tipIncomeSign !== -1"
+                    @click="setTipIncomeSign(-1)"
+                  >
+                    マイナス
+                  </n-button>
+                </n-button-group>
+                <div class="readonly-field">{{ formatYen(tipIncomeDisplay) }}</div>
+              </div>
             </n-form-item>
             <n-form-item label="その他収入" path="otherIncome">
               <n-input-number
@@ -452,23 +583,24 @@ const pageTitle = computed(() => (isEdit.value ? '成績を編集' : '成績を�
               />
             </n-form-item>
             <n-form-item v-if="showSanmaGameFeeBack" label="ゲーム代バック">
-              <div class="readonly-field">¥{{ sanmaGameFeeBackDisplay.toLocaleString() }}</div>
+              <div class="readonly-field">{{ formatYen(sanmaGameFeeBackDisplay) }}</div>
             </n-form-item>
             <n-form-item label="合計収入">
-              <div class="readonly-field total">¥{{ totalIncomeDisplay.toLocaleString() }}</div>
+              <div class="readonly-field total">{{ formatYen(totalIncomeDisplay) }}</div>
             </n-form-item>
           </section>
 
           <section class="form-section">
             <h3>メモ</h3>
             <n-form-item path="note">
-              <n-input v-model:value="formValue.note" type="textarea" rows="3" placeholder="メモ（任意）" />
+              <n-input v-model:value="formValue.note" type="textarea" rows="3" placeholder="メモ (任意)" />
             </n-form-item>
           </section>
         </n-form>
       </n-spin>
     </n-card>
-    <div class="actions actions--sticky">
+
+    <div v-if="!isSimpleBatchMode" class="actions actions--sticky">
       <n-button quaternary class="action-btn" @click="router.push('/results')">戻る</n-button>
       <n-button v-if="isEdit" class="action-btn" type="error" :loading="deleting" @click="handleDelete">削除</n-button>
       <n-button class="action-btn" type="primary" :loading="submitting" @click="handleSubmit">
@@ -490,7 +622,7 @@ const pageTitle = computed(() => (isEdit.value ? '成績を編集' : '成績を�
   padding: 16px;
 }
 
-:deep(.app-page-header) {
+ :deep(.app-page-header) {
   margin-bottom: 12px;
 }
 
@@ -512,10 +644,18 @@ const pageTitle = computed(() => (isEdit.value ? '成績を編集' : '成績を�
   display: flex;
   gap: 12px;
   align-items: center;
+  flex-wrap: wrap;
+}
+
+.chip-income-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .income-sign-toggle :deep(.n-button) {
-  min-width: 56px;
+  min-width: 80px;
   border-radius: 12px;
 }
 
@@ -524,12 +664,14 @@ const pageTitle = computed(() => (isEdit.value ? '成績を編集' : '成績を�
   gap: 12px;
   align-items: center;
   width: 100%;
+  flex-wrap: wrap;
 }
 
 .tip-adjust-buttons {
   display: flex;
   gap: 8px;
 }
+
 .tip-adjust-buttons :deep(.n-button) {
   min-width: 48px;
   border-radius: 10px;
@@ -567,6 +709,7 @@ const pageTitle = computed(() => (isEdit.value ? '成績を編集' : '成績を�
   flex-wrap: wrap;
   gap: 8px;
 }
+
 .place-button-group :deep(.n-button) {
   flex: 1 1 calc(50% - 8px);
   min-width: 110px;
@@ -578,43 +721,20 @@ const pageTitle = computed(() => (isEdit.value ? '成績を編集' : '成績を�
   gap: 12px;
   flex-wrap: wrap;
 }
+
 .actions--sticky {
   position: sticky;
   bottom: 0;
   padding: 16px 0 8px;
   background: linear-gradient(180deg, rgba(245, 247, 250, 0) 0%, rgba(245, 247, 250, 0.95) 40%, rgba(245, 247, 250, 1) 100%);
 }
+
 .action-btn {
   flex: 1;
   width: 100%;
 }
 
-@media (max-width: 420px) {
-  .base-income-row,
-  .tip-input-row {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .income-sign-toggle {
-    width: 100%;
-    display: flex;
-    gap: 8px;
-  }
-  .income-sign-toggle :deep(.n-button) {
-    flex: 1;
-    min-width: auto;
-  }
-
-  .tip-adjust-buttons {
-    width: 100%;
-    justify-content: space-between;
-  }
-  .tip-adjust-buttons :deep(.n-button) {
-    flex: 1;
-    min-width: auto;
-  }
-
+@media (max-width: 640px) {
   .place-button-group :deep(.n-button) {
     flex: 1 1 100%;
     min-width: auto;

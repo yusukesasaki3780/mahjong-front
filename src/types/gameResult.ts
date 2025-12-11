@@ -11,9 +11,13 @@ export interface GameResult {
   tipIncome: number;
   otherIncome: number;
   totalIncome: number;
+  simpleBatchId?: string | null;
+  storeId?: number | null;
+  storeName?: string | null;
   note?: string;
   createdAt?: string;
   updatedAt?: string;
+  isFinalRecord?: boolean;
 }
 
 export interface GameResultPayload {
@@ -25,6 +29,8 @@ export interface GameResultPayload {
   tipIncome: number;
   otherIncome: number;
   totalIncome: number;
+  simpleBatchId?: string | null;
+  storeId?: number | null;
   note?: string;
 }
 
