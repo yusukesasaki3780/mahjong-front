@@ -207,15 +207,14 @@ const yearlyOption = computed(() =>
 
 <template>
   <div class="statistics-page app-page">
-    <AppPageHeader title="統計ダッシュボード" back-to="/dashboard">
-      <template #right>
-        <n-radio-group v-model:value="selectedRange" size="small">
-          <n-radio-button v-for="range in ranges" :key="range" :value="range">
-            {{ rangeLabels[range] }}
-          </n-radio-button>
-        </n-radio-group>
-      </template>
-    </AppPageHeader>
+    <AppPageHeader title="統計ダッシュボード" back-to="/dashboard" back-label="戻る" />
+    <div class="range-switcher">
+      <n-radio-group v-model:value="selectedRange" size="small">
+        <n-radio-button v-for="range in ranges" :key="range" :value="range">
+          {{ rangeLabels[range] }}
+        </n-radio-button>
+      </n-radio-group>
+    </div>
     <p class="eyebrow">ZOOメン ポータル</p>
     <p class="subtitle">期間を切り替えて最新の統計を確認しましょう。</p>
 
@@ -298,6 +297,12 @@ const yearlyOption = computed(() =>
   margin-left: clamp(12px, 8vw, 150px);
   margin-right: clamp(12px, 4vw, 48px);
   max-width: 520px;
+}
+
+.range-switcher {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 clamp(12px, 8vw, 150px);
 }
 
 .stats-stack {
@@ -411,6 +416,10 @@ const yearlyOption = computed(() =>
     margin-left: clamp(12px, 6vw, 24px);
     margin-right: clamp(12px, 6vw, 24px);
     max-width: 100%;
+  }
+  .range-switcher {
+    justify-content: flex-start;
+    margin: 0 clamp(12px, 6vw, 24px);
   }
 }
 </style>

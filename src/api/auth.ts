@@ -1,9 +1,10 @@
-﻿import {
+import {
   apiClient,
   type AuthTokens,
   clearAuthTokens,
   refreshAuthTokens,
   setAuthTokens,
+  setIsAdminFlag,
   setUserId,
 } from './axios';
 
@@ -14,11 +15,33 @@ export interface LoginRequest {
 
 export interface LoginResponse extends AuthTokens {
   userId?: string;
-  user?: { id: string; [key: string]: unknown };
+  user?: { id: string; isAdmin?: boolean; is_admin?: boolean; [key: string]: unknown };
   role?: string;
+  isAdmin?: boolean;
+  is_admin?: boolean;
   expiresIn?: number;
   [key: string]: unknown;
 }
+
+const resolveIsAdmin = (payload: LoginResponse): boolean => {
+  const fromUser = (payload.user ?? {}) as Partial<NonNullable<LoginResponse['user']>>;
+  if (typeof fromUser.isAdmin === 'boolean') {
+    return fromUser.isAdmin;
+  }
+  if (typeof fromUser.is_admin === 'boolean') {
+    return Boolean(fromUser.is_admin);
+  }
+  if (typeof payload.isAdmin === 'boolean') {
+    return payload.isAdmin;
+  }
+  if (typeof payload.is_admin === 'boolean') {
+    return Boolean(payload.is_admin);
+  }
+  if (typeof payload.role === 'string') {
+    return payload.role.toUpperCase() === 'ADMIN';
+  }
+  return false;
+};
 
 // メールアドレスとパスワードで認証し、取得したトークンとユーザー情報を保存する
 export const login = async (payload: LoginRequest): Promise<LoginResponse> => {
@@ -28,6 +51,7 @@ export const login = async (payload: LoginRequest): Promise<LoginResponse> => {
   if (resolvedUserId) {
     setUserId(resolvedUserId);
   }
+  setIsAdminFlag(resolveIsAdmin(data));
   return data;
 };
 

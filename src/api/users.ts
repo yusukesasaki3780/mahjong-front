@@ -3,17 +3,29 @@
 export interface UserProfile {
   id: string;
   name: string;
+  lastName?: string;
+  firstName?: string;
+  nickname?: string;
+  nickName?: string;
   email: string;
   zooId?: number;
   role?: string;
   avatarUrl?: string;
   createdAt?: string;
   updatedAt?: string;
+  storeName?: string;
+  storeId?: number;
+  prefectureCode?: string;
+  isAdmin?: boolean;
+  lastLoginAt?: string;
   [key: string]: unknown;
 }
 
 export type UpsertUserPayload = Omit<UserProfile, 'id'>;
-export type PatchUserPayload = Partial<UpsertUserPayload>;
+export type PatchUserPayload = Partial<UpsertUserPayload> & {
+  currentPassword?: string;
+  newPassword?: string;
+};
 
 // ユーザー API のパスを生成する
 const userPath = (userId: string, suffix = ''): string => `/users/${userId}${suffix}`;
@@ -45,4 +57,8 @@ export const patchUser = async (
 // ユーザーを削除する
 export const deleteUser = async (userId: string): Promise<void> => {
   await apiClient.delete(userPath(userId));
+};
+
+export const deleteMyAccount = async (): Promise<void> => {
+  await apiClient.delete('/users/me');
 };

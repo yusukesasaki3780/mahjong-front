@@ -1,0 +1,45 @@
+import { apiClient } from './axios';
+
+export interface AdminUserSummary {
+  id: string;
+  name: string;
+  email: string;
+  storeName?: string;
+  nickname?: string;
+  nickName?: string;
+  prefectureCode?: string;
+  lastLoginAt?: string | null;
+  isAdmin?: boolean;
+  [key: string]: unknown;
+}
+
+export interface AdminUserDetail extends AdminUserSummary {
+  zooId?: number;
+  storeId?: number;
+  createdAt?: string;
+  updatedAt?: string;
+  firstName?: string;
+  lastName?: string;
+}
+
+export interface PasswordResetPayload {
+  newPassword: string;
+}
+
+export const fetchAdminUsers = async (): Promise<AdminUserSummary[]> => {
+  const { data } = await apiClient.get<AdminUserSummary[]>('/admin/users');
+  return data;
+};
+
+export const fetchAdminUser = async (userId: string): Promise<AdminUserDetail> => {
+  const { data } = await apiClient.get<AdminUserDetail>(`/admin/users/${userId}`);
+  return data;
+};
+
+export const deleteAdminUser = async (userId: string): Promise<void> => {
+  await apiClient.delete(`/admin/users/${userId}`);
+};
+
+export const resetAdminUserPassword = async (userId: string, payload: PasswordResetPayload): Promise<void> => {
+  await apiClient.post(`/admin/users/${userId}/password-reset`, payload);
+};

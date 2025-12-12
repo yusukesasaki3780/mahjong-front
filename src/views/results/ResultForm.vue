@@ -208,12 +208,11 @@ const rules: FormRules = {
   place: [{ required: true, type: 'number', message: '着順を入力してください', trigger: 'change' }],
   baseIncome: [{ required: true, type: 'number', message: 'ベース収入を入力してください', trigger: 'blur' }],
   tipCount: [
-    { required: true, message: 'チップ枚数を入力してください', trigger: 'blur' },
     {
       trigger: ['blur', 'change'],
       validator: (_rule, value: number | null) => {
-        if (value === null || value === undefined) {
-          return Promise.reject(new Error('チップ枚数は数値で入力してください'));
+        if (value === null || value === undefined || Number.isNaN(value)) {
+          return Promise.reject(new Error('チップ枚数を入力してください'));
         }
         return Number.isFinite(value) ? Promise.resolve() : Promise.reject(new Error('チップ枚数は数値で入力してください'));
       },

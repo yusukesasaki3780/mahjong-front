@@ -15,7 +15,9 @@ import StatisticsPage from '../views/statistics/StatisticsPage.vue';
 import GameSettingsPage from '../pages/settings/GameSettings.vue';
 import SalaryPage from '../views/salary/SalaryPage.vue';
 import ProfilePage from '../views/profile/ProfilePage.vue';
-import { getAccessToken, setUnauthorizedHandler } from '../api/axios';
+import UserManagementList from '../views/admin/UserManagementList.vue';
+import UserManagementDetail from '../views/admin/UserManagementDetail.vue';
+import { getAccessToken, getStoredIsAdmin, setUnauthorizedHandler } from '../api/axios';
 
 const routes = [
   {
@@ -96,6 +98,18 @@ const routes = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/admin/users',
+    name: 'admin-users',
+    component: UserManagementList,
+    meta: { requiresAuth: true, requiresAdmin: true },
+  },
+  {
+    path: '/admin/users/:id',
+    name: 'admin-user-detail',
+    component: UserManagementDetail,
+    meta: { requiresAuth: true, requiresAdmin: true },
+  },
+  {
     path: '/',
     redirect: '/login',
     meta: { requiresAuth: false },
@@ -120,14 +134,19 @@ const handleAuthGuard = (
   const isAuthenticated = Boolean(getAccessToken());
   console.log('[Guard] entering', { to: to.path, meta: to.meta, isAuthenticated });
 
-  if (to.path === '/login' && isAuthenticated) {
-    console.log('[Guard] Authenticated user visiting login → allow');
-  }
-
   if (to.meta.requiresAuth && !isAuthenticated) {
-    console.log('[Guard] requiresAuth triggered → redirect to login');
+    console.log('[Guard] requiresAuth triggered -> redirect to login');
     next({ path: '/login', query: { redirect: to.fullPath } });
     return;
+  }
+
+  if (to.meta.requiresAdmin) {
+    const isAdmin = getStoredIsAdmin();
+    if (!isAdmin) {
+      console.log('[Guard] requiresAdmin triggered -> redirect to dashboard');
+      next({ path: '/dashboard' });
+      return;
+    }
   }
 
   console.log('[Guard] normal navigation');

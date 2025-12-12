@@ -14,6 +14,7 @@ const ACCESS_TOKEN_KEY = 'accessToken';
 const REFRESH_TOKEN_KEY = 'refreshToken';
 const USER_ID_KEY = 'userId';
 const AUTH_STATE_KEY = 'auth';
+const IS_ADMIN_KEY = 'isAdmin';
 const isBrowser = typeof window !== 'undefined';
 
 export interface AuthTokens {
@@ -27,6 +28,7 @@ type AuthState = {
   refreshToken?: string;
   userId?: string;
   expiresIn?: number;
+  isAdmin?: boolean;
 };
 
 const readAuthState = (): AuthState | null => {
@@ -143,6 +145,51 @@ const userIdStorage = {
   },
 };
 
+const adminFlagStorage = {
+  get(): boolean {
+    if (authStore.isAdmin !== null) {
+      return Boolean(authStore.isAdmin);
+    }
+    const state = readAuthState();
+    if (typeof state?.isAdmin === 'boolean') {
+      authStore.setIsAdmin(state.isAdmin);
+      return state.isAdmin;
+    }
+    const cached = isBrowser ? window.localStorage.getItem(IS_ADMIN_KEY) : null;
+    if (cached != null) {
+      const flag = cached === 'true';
+      authStore.setIsAdmin(flag);
+      return flag;
+    }
+    return false;
+  },
+  set(flag: boolean): void {
+    if (isBrowser) {
+      window.localStorage.setItem(IS_ADMIN_KEY, String(flag));
+    }
+    writeAuthState({ isAdmin: flag });
+    authStore.setIsAdmin(flag);
+  },
+  clear(): void {
+    if (isBrowser) {
+      window.localStorage.removeItem(IS_ADMIN_KEY);
+      const raw = window.localStorage.getItem(AUTH_STATE_KEY);
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as AuthState;
+          if ('isAdmin' in parsed) {
+            delete parsed.isAdmin;
+            window.localStorage.setItem(AUTH_STATE_KEY, JSON.stringify(parsed));
+          }
+        } catch {
+          // ignore parse errors and fall through
+        }
+      }
+    }
+    authStore.setIsAdmin(null);
+  },
+};
+
 const ensureHeaders = (headers?: AxiosRequestHeaders): AxiosHeaders => {
   if (headers instanceof AxiosHeaders) {
     return headers;
@@ -234,6 +281,7 @@ export const setAuthTokens = ({ accessToken, refreshToken, expiresIn }: AuthToke
 export const clearAuthTokens = (): void => {
   tokenStorage.clear();
   userIdStorage.clear();
+  adminFlagStorage.clear();
   applyDefaultAuthorizationHeader(null);
 };
 
@@ -514,6 +562,7 @@ export const getStoredTokens = (): AuthTokens | null => {
 
 // ログイン中のユーザー ID を取得する
 export const getStoredUserId = (): string | null => userIdStorage.getUserId();
+export const getStoredIsAdmin = (): boolean => adminFlagStorage.get();
 
 export const setAccessToken = tokenStorage.setAccessToken.bind(tokenStorage);
 export const setRefreshToken = tokenStorage.setRefreshToken.bind(tokenStorage);
@@ -521,7 +570,5 @@ export const getAccessToken = tokenStorage.getAccessToken.bind(tokenStorage);
 export const getRefreshToken = tokenStorage.getRefreshToken.bind(tokenStorage);
 export const setUserId = userIdStorage.setUserId.bind(userIdStorage);
 export const getUserId = userIdStorage.getUserId.bind(userIdStorage);
-
-
-
+export const setIsAdminFlag = (flag: boolean): void => adminFlagStorage.set(flag);
 

@@ -88,6 +88,15 @@ const finishForm = reactive({
   returnAmount: 0,
 });
 
+const isFutureDate = (value: number | null | undefined): boolean => {
+  if (value == null) {
+    return false;
+  }
+  return dayjs(value).startOf('day').isAfter(dayjs().startOf('day'));
+};
+
+const disableFutureDate = (timestamp: number) => isFutureDate(timestamp);
+
 const resolveStoreName = (storeId: number | null | undefined): string => {
   if (storeId == null) {
     return '店舗未登録';
@@ -194,6 +203,11 @@ const handleStartBatch = async () => {
   }
   if (startForm.storeId == null) {
     message.error('店舗を選択してください');
+    return;
+  }
+  if (isFutureDate(startForm.playedAt)) {
+    message.error('未来の日付は選択できません');
+    startForm.playedAt = dayjs().startOf('day').valueOf();
     return;
   }
   const selectedStoreId = startForm.storeId;
@@ -397,7 +411,11 @@ watch(
             />
           </n-form-item>
           <n-form-item label="対局日" required>
-            <n-date-picker v-model:value="startForm.playedAt" type="date" />
+            <n-date-picker
+              v-model:value="startForm.playedAt"
+              type="date"
+              :is-date-disabled="disableFutureDate"
+            />
           </n-form-item>
           <div class="start-form-actions">
             <n-button secondary @click="startFormVisible = false">閉じる</n-button>

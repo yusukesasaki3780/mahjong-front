@@ -29,7 +29,7 @@ const formValue = reactive({
   name: '',
   nickname: '',
   zooId: '',
-  storeId: null as number | null,
+  storeId: '',
   prefectureCode: '',
   email: '',
   password: '',
@@ -102,7 +102,7 @@ const setErrorMessages = (error: unknown, fallback: string): void => {
 const fetchStores = async (): Promise<void> => {
   try {
     const { data } = await apiClient.get<Array<{ id: number; storeName: string }>>('/stores');
-    storeOptions.value = data.map((store) => ({ label: store.storeName, value: store.id }));
+    storeOptions.value = data.map((store) => ({ label: store.storeName, value: String(store.id) }));
   } catch (error) {
     setErrorMessages(error, '店舗リストの取得に失敗しました。');
   }
@@ -128,7 +128,7 @@ const handleSubmit = async (): Promise<void> => {
       name: formValue.name,
       nickname: formValue.nickname,
       zooId: Number(formValue.zooId),
-      storeId: formValue.storeId,
+      storeId: Number(formValue.storeId),
       prefectureCode: formValue.prefectureCode,
       email: formValue.email,
       password: formValue.password,

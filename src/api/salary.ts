@@ -8,6 +8,8 @@ export interface SalarySummary {
   totalNightMinutes: number;
   baseWageTotal: number;
   nightExtraTotal: number;
+  nightHourlyWage?: number;
+  nightExtraRate?: number;
   gameIncomeTotal: number;
   transportTotal: number;
   grossSalary: number;
@@ -16,13 +18,21 @@ export interface SalarySummary {
   advanceAmount?: number;
   specialAllowanceTotal?: number;
   specialAllowances?: SpecialAllowance[];
+  specialAllowanceBreakdown?: SpecialAllowance[];
+  specialAllowance?: {
+    regular?: number;
+    lateNight?: number;
+    total?: number;
+  };
 }
 
 export interface SpecialAllowance {
-  type: 'special_hourly_wage' | 'night_bonus' | string;
+  type: 'special_hourly_wage' | 'night_bonus' | 'special_late_night' | 'special_regular' | string;
   label: string;
-  unitPrice: number;
+  unitPrice?: number;
+  unit?: number;
   hours?: number;
+  rate?: number;
   amount: number;
   specialHourlyWageId?: number | null;
 }
