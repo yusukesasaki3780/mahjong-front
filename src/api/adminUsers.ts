@@ -10,6 +10,7 @@ export interface AdminUserSummary {
   prefectureCode?: string;
   lastLoginAt?: string | null;
   isAdmin?: boolean;
+  isDeleted?: boolean;
   [key: string]: unknown;
 }
 
@@ -38,6 +39,10 @@ export const fetchAdminUser = async (userId: string): Promise<AdminUserDetail> =
 
 export const deleteAdminUser = async (userId: string): Promise<void> => {
   await apiClient.delete(`/admin/users/${userId}`);
+};
+
+export const restoreAdminUser = async (userId: string): Promise<void> => {
+  await apiClient.patch(`/admin/users/${userId}/restore`);
 };
 
 export const resetAdminUserPassword = async (userId: string, payload: PasswordResetPayload): Promise<void> => {

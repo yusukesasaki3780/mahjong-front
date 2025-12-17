@@ -12,6 +12,11 @@ const emit = defineEmits<{
   (e: 'month-change', payload: string): void;
 }>();
 
+const props = defineProps<{
+  storeId: number | null;
+  storeIdRequired?: boolean;
+}>();
+
 const notification = useNotification();
 const userId = getStoredUserId();
 const referenceDate = ref<Dayjs>(dayjs());
@@ -62,13 +67,23 @@ const fetchWeek = async (): Promise<void> => {
     notification.error({ title: 'Authentication', content: 'Please sign in again.' });
     return;
   }
+  if (props.storeIdRequired && (typeof props.storeId !== 'number' || Number.isNaN(props.storeId))) {
+    return;
+  }
   loading.value = true;
   try {
     const start = weekStart.value;
     const end = start.add(6, 'day');
     const startKey = start.format('YYYY-MM-DD');
     const endKey = end.format('YYYY-MM-DD');
-    const data = await getWeekShifts(userId, startKey, endKey);
+    const storeParam =
+      typeof props.storeId === 'number' && !Number.isNaN(props.storeId) ? props.storeId : null;
+    const data = await getWeekShifts(
+      userId,
+      startKey,
+      endKey,
+      storeParam != null ? { storeId: storeParam } : undefined,
+    );
     weekShifts.value = groupByDate(data);
     emit('month-change', start.format('YYYY-MM'));
   } catch (error) {
@@ -86,7 +101,7 @@ onMounted(() => {
 });
 
 watch(
-  () => referenceDate.value.valueOf(),
+  () => [referenceDate.value.valueOf(), props.storeId, props.storeIdRequired],
   () => {
     fetchWeek().catch(() => undefined);
   },
@@ -255,8 +270,5 @@ defineExpose({ refresh: fetchWeek });
   }
 }
 </style>
-
-
-
 
 

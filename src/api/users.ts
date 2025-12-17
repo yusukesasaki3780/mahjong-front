@@ -15,6 +15,7 @@ export interface UserProfile {
   updatedAt?: string;
   storeName?: string;
   storeId?: number;
+  helpStoreIds?: number[];
   prefectureCode?: string;
   isAdmin?: boolean;
   lastLoginAt?: string;

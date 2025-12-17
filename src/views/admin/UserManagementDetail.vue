@@ -23,6 +23,7 @@ const formatDate = (value?: string | null): string => {
 };
 
 const displayName = computed(() => user.value?.name ?? 'ユーザー詳細');
+const statusLabel = computed(() => (user.value?.isDeleted ? '削除済み' : '有効'));
 
 const loadDetail = async (): Promise<void> => {
   const userId = route.params.id as string | undefined;
@@ -78,8 +79,21 @@ onMounted(() => {
               <dd>{{ user.storeName || '未登録' }}</dd>
             </div>
             <div>
+              <dt>状態</dt>
+              <dd>
+                <span
+                  :class="[
+                    'status-badge',
+                    user.isDeleted ? 'status-badge--deleted' : 'status-badge--active',
+                  ]"
+                >
+                  {{ statusLabel }}
+                </span>
+              </dd>
+            </div>
+            <div>
               <dt>zoo ID</dt>
-              <dd>{{ user.zooId ?? '—' }}</dd>
+              <dd>{{ user.zooId ?? '―' }}</dd>
             </div>
           </dl>
         </div>
@@ -163,5 +177,23 @@ dd {
   padding: 24px 0;
   text-align: center;
   color: #94a3b8;
+}
+
+.status-badge {
+  display: inline-flex;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-badge--active {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.status-badge--deleted {
+  background: #fee2e2;
+  color: #b91c1c;
 }
 </style>

@@ -5,10 +5,20 @@ import { TimeOutline, MoonOutline, StatsChartOutline, CalendarOutline } from '@v
 import { useShiftStats } from '../../composables/useShiftStats';
 import { isApiClientError } from '../../api/axios';
 
-const props = defineProps<{ yearMonth: string }>();
+const props = defineProps<{
+  yearMonth: string;
+  storeId?: number | null;
+  storeIdRequired?: boolean;
+}>();
 const notification = useNotification();
 
-const { stats, loading, error, fetchStats } = useShiftStats(computed(() => props.yearMonth));
+const storeIdRef = computed(() => props.storeId ?? null);
+const storeIdRequiredRef = computed(() => Boolean(props.storeIdRequired));
+
+const { stats, loading, error, fetchStats } = useShiftStats(computed(() => props.yearMonth), {
+  storeId: storeIdRef,
+  storeIdRequired: storeIdRequiredRef,
+});
 
 watch(error, (err) => {
   if (!err) return;

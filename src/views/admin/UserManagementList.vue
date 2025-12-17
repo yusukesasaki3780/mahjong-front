@@ -22,6 +22,7 @@ import {
   deleteAdminUser,
   fetchAdminUsers,
   resetAdminUserPassword,
+  restoreAdminUser,
   type AdminUserSummary,
 } from '../../api/adminUsers';
 import { extractErrorMessages } from '../../utils/validationMessages';
@@ -36,6 +37,7 @@ const loading = ref(false);
 const users = ref<AdminUserSummary[]>([]);
 const errorMessages = ref<string[]>([]);
 const deletingUserId = ref<string | null>(null);
+const restoringUserId = ref<string | null>(null);
 
 const PASSWORD_MIN = 8;
 const PASSWORD_MAX = 12;
@@ -77,6 +79,8 @@ const formatLastLogin = (value?: string | null): string => {
 
 const displayUsers = computed(() => users.value.filter((user) => !user.isAdmin));
 
+const statusLabel = (user: AdminUserSummary): string => (user.isDeleted ? '削除済み' : '有効');
+
 const handleErrors = (error: unknown, fallback: string): void => {
   errorMessages.value = extractErrorMessages(error, {
     fallbackMessage: fallback,
@@ -102,6 +106,9 @@ const handleViewDetail = (userId: string): void => {
 const handleDeleteUser = (user: AdminUserSummary): void => {
   if (user.id === currentUserId) {
     message.warning('自分自身のアカウントは削除できません');
+    return;
+  }
+  if (user.isDeleted) {
     return;
   }
   dialog.warning({
@@ -156,6 +163,27 @@ const handlePasswordReset = async (): Promise<void> => {
   }
 };
 
+const handleRestoreUser = (user: AdminUserSummary): void => {
+  dialog.info({
+    title: 'このユーザーを復帰しますか？',
+    content: '復帰すると再度ログインできるようになります。',
+    positiveText: '復帰',
+    negativeText: 'キャンセル',
+    onPositiveClick: async () => {
+      restoringUserId.value = user.id;
+      try {
+        await restoreAdminUser(user.id);
+        message.success('ユーザーを復帰しました');
+        await loadUsers();
+      } catch (error) {
+        handleErrors(error, 'ユーザーの復帰に失敗しました');
+      } finally {
+        restoringUserId.value = null;
+      }
+    },
+  });
+};
+
 onMounted(() => {
   loadUsers().catch(() => undefined);
 });
@@ -182,22 +210,43 @@ onMounted(() => {
                 <th>ニックネーム</th>
                 <th>メールアドレス</th>
                 <th>所属店舗</th>
+                <th>状態</th>
                 <th>最終ログイン</th>
                 <th class="actions-header">操作</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="user in displayUsers" :key="user.id">
+              <tr v-for="user in displayUsers" :key="user.id" :class="{ 'is-deleted-row': user.isDeleted }">
                 <td>{{ user.name }}</td>
-                <td>{{ user.nickname || user.nickName || '—' }}</td>
+                <td>{{ user.nickname || user.nickName || '―' }}</td>
                 <td>{{ user.email }}</td>
                 <td>{{ user.storeName || '未登録' }}</td>
+                <td>
+                  <span
+                    :class="[
+                      'status-badge',
+                      user.isDeleted ? 'status-badge--deleted' : 'status-badge--active',
+                    ]"
+                  >
+                    {{ statusLabel(user) }}
+                  </span>
+                </td>
                 <td>{{ formatLastLogin(user.lastLoginAt) }}</td>
                 <td class="actions-cell">
                   <n-button size="small" @click="handleViewDetail(user.id)">詳細</n-button>
                   <n-button size="small" tertiary type="warning" @click="openPasswordModal(user)">パスワード再発行</n-button>
                   <n-button
-                    v-if="user.id !== currentUserId"
+                    v-if="user.isDeleted"
+                    size="small"
+                    type="success"
+                    ghost
+                    :loading="restoringUserId === user.id"
+                    @click="handleRestoreUser(user)"
+                  >
+                    復帰
+                  </n-button>
+                  <n-button
+                    v-else-if="user.id !== currentUserId"
                     size="small"
                     type="error"
                     :loading="deletingUserId === user.id"
@@ -229,6 +278,19 @@ onMounted(() => {
               <span class="label">所属店舗</span>
               <span class="value">{{ user.storeName || '未登録' }}</span>
             </div>
+            <div class="user-card-row status-row">
+              <span class="label">状態</span>
+              <span class="value">
+                <span
+                  :class="[
+                    'status-badge',
+                    user.isDeleted ? 'status-badge--deleted' : 'status-badge--active',
+                  ]"
+                >
+                  {{ statusLabel(user) }}
+                </span>
+              </span>
+            </div>
             <div class="user-card-row">
               <span class="label">最終ログイン</span>
               <span class="value">{{ formatLastLogin(user.lastLoginAt) }}</span>
@@ -237,7 +299,17 @@ onMounted(() => {
               <n-button size="tiny" @click="handleViewDetail(user.id)">詳細</n-button>
               <n-button size="tiny" tertiary type="warning" @click="openPasswordModal(user)">パスワード再発行</n-button>
               <n-button
-                v-if="user.id !== currentUserId"
+                v-if="user.isDeleted"
+                size="tiny"
+                type="success"
+                ghost
+                :loading="restoringUserId === user.id"
+                @click="handleRestoreUser(user)"
+              >
+                復帰
+              </n-button>
+              <n-button
+                v-else-if="user.id !== currentUserId"
                 size="tiny"
                 type="error"
                 :loading="deletingUserId === user.id"
@@ -318,6 +390,30 @@ table :deep(td) {
 
 .actions-cell :deep(.n-button) {
   margin-left: 6px;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-badge--active {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.status-badge--deleted {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.is-deleted-row td {
+  color: #94a3b8;
 }
 
 .empty-row {

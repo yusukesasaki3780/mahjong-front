@@ -16,12 +16,22 @@ import 'dayjs/locale/ja';
 import updateLocale from 'dayjs/plugin/updateLocale';
 import AppPageHeader from '../../components/common/AppPageHeader.vue';
 import { getShifts, type Shift } from '../../api/shifts';
-import { getStoredUserId, isApiClientError } from '../../api/axios';
+import { getStoredIsAdmin, getStoredUserId, isApiClientError } from '../../api/axios';
+import { getUser } from '../../api/users';
 import ShiftDayCell from '../../components/shift/ShiftDayCell.vue';
 import ShiftEditorDrawer from '../../components/shift/ShiftEditorDrawer.vue';
 import ShiftWeekView from './ShiftWeekView.vue';
 import ShiftStatsCard from '../../components/shift/ShiftStatsCard.vue';
+import ShiftBoardTab from '../../components/shift/board/ShiftBoardTab.vue';
+import type { ShiftBoardShift } from '../../api/shiftBoard';
 import { useResponsive } from '../../composables/useResponsive';
+import { resolveShiftStoreId } from '../../utils/shiftStore';
+import {
+  getNotifications,
+  markNotificationRead,
+  deleteNotification,
+  type ShiftNotification,
+} from '../../api/notifications';
 
 type WeekViewExpose = {
   refresh: () => Promise<void>;
@@ -39,7 +49,7 @@ dayjs.updateLocale('ja', {
 });
 dayjs.locale('ja');
 
-const activeTab = ref<'month' | 'week'>('month');
+const activeTab = ref<'month' | 'week' | 'board'>('month');
 const calendarValue = ref(Date.now());
 const monthShifts = ref<Record<string, Shift[]>>({});
 const loadingMonth = ref(false);
@@ -47,7 +57,10 @@ const selectedDate = ref<string | null>(null);
 const drawerVisible = ref(false);
 const weekViewRef = ref<WeekViewExpose | null>(null);
 const statsCardRef = ref<{ refetch: () => void } | null>(null);
+const boardTabRef = ref<{ refresh: () => Promise<void> } | null>(null);
 const weekYearMonth = ref(dayjs().format('YYYY-MM'));
+const notifications = ref<ShiftNotification[]>([]);
+const notificationsLoading = ref(false);
 
 const currentMonthKey = computed(() => dayjs(calendarValue.value).format('YYYY-MM'));
 const statsYearMonth = computed(() => (activeTab.value === 'month' ? currentMonthKey.value : weekYearMonth.value));
@@ -57,6 +70,50 @@ const monthLabelParts = computed(() => ({
 }));
 const weekdayStrip = ['月', '火', '水', '木', '金', '土', '日'];
 const today = dayjs().format('YYYY-MM-DD');
+const isAdminUser = getStoredIsAdmin();
+
+type DrawerContext =
+  | {
+      source: 'self';
+      storeId: number | null;
+    }
+  | {
+      source: 'board';
+      userId: string;
+      shifts: Shift[];
+      storeId: number;
+    };
+
+const drawerContext = ref<DrawerContext | null>(null);
+const selfStoreId = ref<number | null>(null);
+const adminStoreId = computed<number | null>(() => {
+  if (!isAdminUser) {
+    return null;
+  }
+  try {
+    return resolveShiftStoreId({
+      role: 'ADMIN',
+      selectedStoreId: selfStoreId.value,
+      fallbackStoreId: selfStoreId.value,
+    });
+  } catch {
+    return null;
+  }
+});
+
+const loadSelfStoreId = async (): Promise<void> => {
+  if (!userId) {
+    return;
+  }
+  try {
+    const profile = await getUser(userId);
+    const rawStoreId = profile.storeId;
+    selfStoreId.value =
+      typeof rawStoreId === 'number' && !Number.isNaN(rawStoreId) ? rawStoreId : null;
+  } catch (error) {
+    console.error('Failed to load user profile storeId', error);
+  }
+};
 
 // さまざまな日付文字列を YYYY-MM-DD の正規化した形式に変換する
 const normalizeDateString = (value?: string | null): string | null => {
@@ -99,14 +156,69 @@ const getShiftsByDate = (date: string): Shift[] => monthShifts.value[date] ?? []
 const isToday = (date: string): boolean => date === today;
 
 // 日付セル選択時にドロワーを開く
-const openDrawer = (payload: { date: string; shifts?: Shift[] } | string): void => {
+type DrawerOpenPayload =
+  | string
+  | {
+      date: string;
+      shifts?: Shift[];
+      userId?: string | null;
+      source?: 'self' | 'board';
+      storeId?: number | null;
+    };
+
+const openDrawer = (payload: DrawerOpenPayload): void => {
+  let date: string;
+  let shifts: Shift[] | undefined;
+  let userId: string | null | undefined;
+  let source: 'self' | 'board' = 'self';
+  let storeIdParam: number | null = null;
+
   if (typeof payload === 'string') {
-    selectedDate.value = payload;
+    date = payload;
   } else {
-    selectedDate.value = payload.date;
-    if (payload.shifts) {
-      monthShifts.value[payload.date] = payload.shifts;
+    date = payload.date;
+    shifts = payload.shifts;
+    userId = payload.userId;
+    source = payload.source ?? (payload.userId ? 'board' : 'self');
+    if (typeof payload.storeId === 'number' && !Number.isNaN(payload.storeId)) {
+      storeIdParam = payload.storeId;
     }
+  }
+
+  selectedDate.value = date;
+  let resolvedStoreId: number | null = null;
+  if (source === 'board') {
+    try {
+      resolvedStoreId = resolveShiftStoreId({
+        role: 'ADMIN',
+        selectedStoreId: storeIdParam,
+        fallbackStoreId: selfStoreId.value,
+      });
+    } catch (error) {
+      notification.error({
+        title: '店舗が特定できません',
+        content: '対象店舗を選択してからシフトを編集してください。',
+      });
+      return;
+    }
+  }
+
+  if (source === 'self' && shifts) {
+    monthShifts.value[date] = shifts;
+  }
+
+  if (source === 'board' && userId && resolvedStoreId != null) {
+    drawerContext.value = {
+      source: 'board',
+      userId,
+      shifts: shifts ?? [],
+      storeId: resolvedStoreId,
+    };
+  } else {
+    drawerContext.value = {
+      source: 'self',
+      storeId: resolvedStoreId,
+    };
   }
   drawerVisible.value = true;
 };
@@ -114,6 +226,7 @@ const openDrawer = (payload: { date: string; shifts?: Shift[] } | string): void 
 // ドロワーを閉じる
 const closeDrawer = (): void => {
   drawerVisible.value = false;
+  drawerContext.value = null;
 };
 
 // 選択中の月のシフト情報を取得する
@@ -122,9 +235,18 @@ const loadMonth = async (): Promise<void> => {
     notification.error({ title: '認証エラー', content: '再度ログインしてください。' });
     return;
   }
+  if (isAdminUser && adminStoreId.value == null) {
+    return;
+  }
   loadingMonth.value = true;
   try {
-    const data = await getShifts(userId, { rangeType: 'month', yearMonth: currentMonthKey.value });
+    const storeOptions =
+      isAdminUser && adminStoreId.value != null ? { storeId: adminStoreId.value } : undefined;
+    const data = await getShifts(
+      userId,
+      { rangeType: 'month', yearMonth: currentMonthKey.value },
+      storeOptions,
+    );
     monthShifts.value = groupByDate(data);
   } catch (error) {
     const message = isApiClientError(error) ? error.message : 'シフトの取得に失敗しました';
@@ -135,7 +257,7 @@ const loadMonth = async (): Promise<void> => {
 };
 
 watch(
-  () => currentMonthKey.value,
+  () => [currentMonthKey.value, adminStoreId.value],
   () => {
     void loadMonth();
   },
@@ -143,7 +265,8 @@ watch(
 );
 
 onMounted(() => {
-  void loadMonth();
+  void loadSelfStoreId();
+  void loadNotifications();
 });
 
 // 月表示・週表示それぞれのデータをまとめて再取得する
@@ -153,6 +276,62 @@ const refreshAll = async (): Promise<void> => {
     await weekViewRef.value.refresh();
   }
   statsCardRef.value?.refetch();
+  if (boardTabRef.value) {
+    await boardTabRef.value.refresh();
+  }
+  await loadNotifications();
+};
+
+const hasNotifications = computed(() => notifications.value.length > 0);
+
+const loadNotifications = async (): Promise<void> => {
+  notificationsLoading.value = true;
+  try {
+    notifications.value = await getNotifications({ onlyUnread: true });
+  } catch (error) {
+    console.error('Failed to load notifications', error);
+    notification.error({
+      title: '通知',
+      content: isApiClientError(error) ? error.message : '通知の取得に失敗しました。',
+    });
+  } finally {
+    notificationsLoading.value = false;
+  }
+};
+
+const removeNotificationLocally = (id: ShiftNotification['id']) => {
+  notifications.value = notifications.value.filter((item) => item.id !== id);
+};
+
+const handleNotificationRead = async (id: ShiftNotification['id']): Promise<void> => {
+  try {
+    await markNotificationRead(id);
+    removeNotificationLocally(id);
+    notification.success({ title: '通知', content: '通知を既読にしました。' });
+  } catch (error) {
+    notification.error({
+      title: '通知',
+      content: isApiClientError(error) ? error.message : '通知の更新に失敗しました。',
+    });
+  }
+};
+
+const handleNotificationDelete = async (id: ShiftNotification['id']): Promise<void> => {
+  try {
+    await deleteNotification(id);
+    removeNotificationLocally(id);
+    notification.success({ title: '通知', content: '通知を削除しました。' });
+  } catch (error) {
+    notification.error({
+      title: '通知',
+      content: isApiClientError(error) ? error.message : '通知の削除に失敗しました。',
+    });
+  }
+};
+
+const formatNotificationDate = (value: string): string => {
+  const parsed = dayjs(value);
+  return parsed.isValid() ? parsed.format('MM/DD HH:mm') : value;
 };
 
 // 週表示コンポーネントから渡される年月を統計カードに反映する
@@ -161,6 +340,65 @@ const handleWeekMonthChange = (yearMonth: string): void => {
 };
 
 const isMobile = computed(() => responsive.current.value === 'mobile');
+
+const drawerShifts = computed<Shift[]>(() => {
+  if (drawerContext.value?.source === 'board') {
+    return drawerContext.value.shifts;
+  }
+  return selectedDate.value ? getShiftsByDate(selectedDate.value) : [];
+});
+
+const drawerUserIdOverride = computed(() =>
+  drawerContext.value?.source === 'board' ? drawerContext.value.userId : null,
+);
+
+const drawerStoreIdOverride = computed<number | null>(() =>
+  drawerContext.value?.source === 'board' ? drawerContext.value.storeId : null,
+);
+
+const handleBoardEditShift = (payload: {
+  date: string;
+  userId: string;
+  storeId: number | null;
+  shift?: ShiftBoardShift | null;
+}): void => {
+  let resolvedStoreId: number;
+  try {
+    resolvedStoreId = resolveShiftStoreId({
+      role: 'ADMIN',
+      selectedStoreId: payload.storeId,
+      fallbackStoreId: selfStoreId.value,
+    });
+  } catch {
+    notification.error({
+      title: '店舗が特定できません',
+      content: '対象店舗を選択してからシフトを編集してください。',
+    });
+    return;
+  }
+
+  const shifts: Shift[] =
+    payload.shift && payload.shift.id
+      ? [
+          {
+            id: payload.shift.id,
+            userId: payload.userId,
+            date: payload.shift.date,
+            startTime: payload.shift.startTime,
+            endTime: payload.shift.endTime,
+            memo: payload.shift.memo ?? '',
+          },
+        ]
+      : [];
+  drawerContext.value = {
+    source: 'board',
+    userId: payload.userId,
+    shifts,
+    storeId: resolvedStoreId,
+  };
+  selectedDate.value = payload.date;
+  drawerVisible.value = true;
+};
 
 type CalendarSlotProps = {
   year?: number;
@@ -242,6 +480,64 @@ const uiLocale = jaJP;
       <AppPageHeader title="シフト管理" back-to="/dashboard" />
       <p class="subtitle">月表示・週表示を切り替えてシフトを確認・編集できます。</p>
 
+      <div
+        v-if="notificationsLoading || hasNotifications"
+        class="notification-stack"
+      >
+        <n-card class="notification-card">
+          <div class="notification-header">
+            <div>
+              <span class="notification-title">通知</span>
+              <small v-if="notifications.length" class="notification-count">
+                {{ notifications.length }}件
+              </small>
+            </div>
+            <n-button text size="tiny" :loading="notificationsLoading" @click="loadNotifications">
+              再読み込み
+            </n-button>
+          </div>
+          <div v-if="notificationsLoading && !notifications.length" class="notification-loading">
+            <n-skeleton text :repeat="2" />
+          </div>
+          <div v-else-if="!notifications.length" class="notification-empty">
+            未読の通知はありません
+          </div>
+          <ul v-else class="notification-list">
+            <li
+              v-for="notificationItem in notifications"
+              :key="notificationItem.id"
+              class="notification-item"
+            >
+              <div class="notification-body">
+                <p class="notification-message">{{ notificationItem.message }}</p>
+                <div class="notification-meta">
+                  <span class="notification-time">
+                    {{ formatNotificationDate(notificationItem.createdAt) }}
+                  </span>
+                  <div class="notification-actions">
+                    <n-button
+                      text
+                      size="tiny"
+                      @click="handleNotificationRead(notificationItem.id)"
+                    >
+                      既読にする
+                    </n-button>
+                    <n-button
+                      text
+                      size="tiny"
+                      type="error"
+                      @click="handleNotificationDelete(notificationItem.id)"
+                    >
+                      削除
+                    </n-button>
+                  </div>
+                </div>
+              </div>
+            </li>
+          </ul>
+        </n-card>
+      </div>
+
       <div class="shift-stack">
         <n-card class="calendar-card">
           <n-tabs v-model:value="activeTab" type="line">
@@ -295,21 +591,39 @@ const uiLocale = jaJP;
             <n-tab-pane name="week" tab="週表示">
               <ShiftWeekView
                 ref="weekViewRef"
+                :store-id="adminStoreId"
+                :store-id-required="Boolean(isAdminUser)"
                 @select-date="openDrawer"
                 @month-change="handleWeekMonthChange"
+              />
+            </n-tab-pane>
+
+            <n-tab-pane name="board" tab="メンバー間シフト確認">
+              <ShiftBoardTab
+                ref="boardTabRef"
+                :is-admin="Boolean(isAdminUser)"
+                @edit-shift-request="handleBoardEditShift"
               />
             </n-tab-pane>
           </n-tabs>
         </n-card>
 
-        <ShiftStatsCard class="stats-card" ref="statsCardRef" :year-month="statsYearMonth" />
+        <ShiftStatsCard
+          class="stats-card"
+          ref="statsCardRef"
+          :year-month="statsYearMonth"
+          :store-id="adminStoreId"
+          :store-id-required="Boolean(isAdminUser)"
+        />
       </div>
 
       <ShiftEditorDrawer
         :visible="drawerVisible"
         :date="selectedDate"
-        :shifts="selectedDate ? getShiftsByDate(selectedDate) : []"
+        :shifts="drawerShifts"
         :is-full-screen="isMobile"
+        :user-id-override="drawerUserIdOverride"
+        :store-id-override="drawerStoreIdOverride"
         @close="closeDrawer"
         @refresh="refreshAll"
       />
@@ -340,6 +654,77 @@ const uiLocale = jaJP;
   flex-direction: column;
   gap: 16px;
   width: 100%;
+}
+
+.notification-stack {
+  margin-left: clamp(12px, 8vw, 160px);
+  margin-right: clamp(12px, 4vw, 48px);
+}
+
+.notification-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+}
+
+.notification-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.notification-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.notification-count {
+  margin-left: 8px;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.notification-empty {
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.notification-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.notification-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px;
+  background: #f8fafc;
+}
+
+.notification-message {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: #0f172a;
+  line-height: 1.4;
+}
+
+.notification-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.notification-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .calendar-card {

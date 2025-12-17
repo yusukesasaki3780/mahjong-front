@@ -11,6 +11,7 @@ import {
   NListItem,
   NRadio,
   NRadioGroup,
+  NSelect,
   useNotification,
   type FormInst,
 } from 'naive-ui';
@@ -28,17 +29,44 @@ import { extractErrorMessages } from '../../utils/validationMessages';
 import { getSpecialHourlyWages, type SpecialHourlyWage } from '../../api/specialWages';
 
 type BreakRange = { id: string; start: string; end: string };
+type WorkTypeValue =
+  | 'EARLY_FULL'
+  | 'EARLY_HALF_1'
+  | 'EARLY_HALF_2'
+  | 'LATE_FULL'
+  | 'LATE_HALF_1'
+  | 'LATE_HALF_2';
+
+const WORK_TYPES: { value: WorkTypeValue; label: string; start: string; end: string }[] = [
+  { value: 'EARLY_FULL', label: '早〇 (10:00-22:00)', start: '10:00', end: '22:00' },
+  { value: 'EARLY_HALF_1', label: '早ハーフ1 (10:00-17:00)', start: '10:00', end: '17:00' },
+  { value: 'EARLY_HALF_2', label: '早ハーフ2 (17:00-22:00)', start: '17:00', end: '22:00' },
+  { value: 'LATE_FULL', label: '遅〇 (22:00-10:00)', start: '22:00', end: '10:00' },
+  { value: 'LATE_HALF_1', label: '遅ハーフ1 (22:00-05:00)', start: '22:00', end: '05:00' },
+  { value: 'LATE_HALF_2', label: '遅ハーフ2 (05:00-10:00)', start: '05:00', end: '10:00' },
+];
+const WORK_TYPE_MAP = WORK_TYPES.reduce<Record<WorkTypeValue, { start: string; end: string }>>((acc, type) => {
+  acc[type.value] = { start: type.start, end: type.end };
+  return acc;
+}, {} as Record<WorkTypeValue, { start: string; end: string }>);
+const WORK_TYPE_SELECT_OPTIONS = WORK_TYPES.map((type) => ({
+  label: type.label,
+  value: type.value,
+}));
 
 const props = defineProps<{
   visible: boolean;
   date: string | null;
   shifts: Shift[];
   isFullScreen?: boolean;
+  userIdOverride?: string | null;
+  storeIdOverride?: number | null;
 }>();
 const emit = defineEmits<{ (e: 'close'): void; (e: 'refresh'): void }>();
 
 const notification = useNotification();
-const userId = getStoredUserId();
+const storedUserId = getStoredUserId();
+const activeUserId = computed(() => props.userIdOverride ?? storedUserId);
 const formRef = ref<FormInst | null>(null);
 const saving = ref(false);
 const editingShiftId = ref<string | null>(null);
@@ -68,6 +96,41 @@ const form = reactive({
   memo: '',
 });
 const selectedSpecialWageId = ref<number | null>(null);
+const selectedWorkType = ref<WorkTypeValue | null>(null);
+let isApplyingWorkType = false;
+
+const getStoreRequestOptions = (): { storeId: number } | undefined => {
+  if (typeof props.storeIdOverride === 'number' && !Number.isNaN(props.storeIdOverride)) {
+    return { storeId: Number(props.storeIdOverride) };
+  }
+  return undefined;
+};
+
+const containsOverlapError = (source: unknown): boolean => {
+  if (!source) {
+    return false;
+  }
+  if (Array.isArray(source)) {
+    return source.some((item) => containsOverlapError(item));
+  }
+  if (typeof source === 'object') {
+    const record = source as Record<string, unknown>;
+    const field = typeof record.field === 'string' ? record.field : undefined;
+    const code = typeof record.code === 'string' ? record.code : undefined;
+    if (field === 'timeRange' && code === 'OVERLAP') {
+      return true;
+    }
+    return Object.values(record).some((value) => containsOverlapError(value));
+  }
+  return false;
+};
+
+const isOverlapTimeRangeError = (error: unknown): boolean => {
+  if (!isApiClientError(error)) {
+    return false;
+  }
+  return containsOverlapError(error.details);
+};
 
 const resetForm = (): void => {
   editingShiftId.value = null;
@@ -77,6 +140,7 @@ const resetForm = (): void => {
   existingBreakSummary.value = null;
   form.memo = '';
   selectedSpecialWageId.value = null;
+  selectedWorkType.value = null;
 };
 
 const fetchSpecialWages = async (): Promise<void> => {
@@ -110,6 +174,30 @@ onMounted(() => {
   fetchSpecialWages().catch(() => undefined);
 });
 
+watch(selectedWorkType, (value) => {
+  if (!value) {
+    return;
+  }
+  const preset = WORK_TYPE_MAP[value];
+  if (preset) {
+    isApplyingWorkType = true;
+    form.start = preset.start;
+    form.end = preset.end;
+    isApplyingWorkType = false;
+  }
+});
+
+watch<[string, string]>(
+  () => [form.start, form.end],
+  ([start, end]) => {
+    if (isApplyingWorkType) {
+      return;
+    }
+    const matched = matchWorkType(start, end);
+    selectedWorkType.value = matched;
+  },
+);
+
 const toInputTime = (value?: string): string => {
   if (!value) {
     return '';
@@ -134,6 +222,11 @@ const formatDisplayTime = (value?: string): string => {
     }
   }
   return value.slice(0, 5);
+};
+
+const matchWorkType = (start: string, end: string): WorkTypeValue | null => {
+  const matched = WORK_TYPES.find((type) => type.start === start && type.end === end);
+  return matched ? matched.value : null;
 };
 
 const selectShift = (shift: Shift): void => {
@@ -162,6 +255,7 @@ const selectShift = (shift: Shift): void => {
     shift.specialHourlyWageId ??
     null;
   selectedSpecialWageId.value = typeof incomingSpecialId === 'number' ? incomingSpecialId : null;
+  selectedWorkType.value = matchWorkType(form.start, form.end);
 };
 
 const parseTimeToMinutes = (value: string): number | null => {
@@ -273,7 +367,8 @@ const handleSubmit = async (): Promise<void> => {
     return;
   }
 
-  if (!userId) {
+  const targetUserId = activeUserId.value;
+  if (!targetUserId) {
     notification.error({ title: 'Authentication', content: 'ログイン情報が取得できませんでした。' });
     return;
   }
@@ -288,40 +383,52 @@ const handleSubmit = async (): Promise<void> => {
     return;
   }
 
+  const storeOptions = getStoreRequestOptions();
+
   saving.value = true;
   try {
     const payload = buildPayload();
     if (editingShiftId.value) {
-      await updateShift(userId, editingShiftId.value, payload);
+      await updateShift(targetUserId, editingShiftId.value, payload, storeOptions);
       notification.success({ title: 'シフト', content: 'シフトを更新しました。' });
     } else {
-      await createShift(userId, payload);
+      await createShift(targetUserId, payload, storeOptions);
       notification.success({ title: 'シフト', content: 'シフトを作成しました。' });
     }
     emit('refresh');
     resetForm();
   } catch (error) {
-    const content = extractErrorMessages(error, {
-      fieldLabels: shiftFieldLabels,
-      fallbackMessage: 'シフトの保存に失敗しました。',
-    }).join('\n');
-    notification.error({
-      title: 'シフトエラー',
-      content,
-    });
+    if (isOverlapTimeRangeError(error)) {
+      notification.error({
+        title: 'シフトエラー',
+        content: '同じ日に時間が重複するシフトは登録できません',
+      });
+    } else {
+      const content = extractErrorMessages(error, {
+        fieldLabels: shiftFieldLabels,
+        fallbackMessage: 'シフトの保存に失敗しました。',
+      }).join('\n');
+      notification.error({
+        title: 'シフトエラー',
+        content,
+      });
+    }
   } finally {
     saving.value = false;
   }
 };
 
 const handleDelete = async (shiftId: string): Promise<void> => {
-  if (!userId) {
+  const targetUserId = activeUserId.value;
+  if (!targetUserId) {
     notification.error({ title: 'Authentication', content: 'ログイン情報が取得できませんでした。' });
     return;
   }
 
+  const storeOptions = getStoreRequestOptions();
+
   try {
-    await deleteShift(userId, shiftId);
+    await deleteShift(targetUserId, shiftId, storeOptions);
     notification.success({ title: 'シフト', content: 'シフトを削除しました。' });
     emit('refresh');
     if (editingShiftId.value === shiftId) {
@@ -366,7 +473,12 @@ const goBack = (): void => {
                   <strong>{{ formatDisplayTime(shift.startTime) }} - {{ formatDisplayTime(shift.endTime) }}</strong>
                   <p class="shift-notes">{{ shift.memo || 'メモはありません' }}</p>
                 </div>
-                <n-button quaternary size="tiny" type="error" @click.stop="handleDelete(shift.id)">
+                <n-button
+                  quaternary
+                  size="tiny"
+                  type="error"
+                  @click.stop="handleDelete(shift.id)"
+                >
                   削除
                 </n-button>
               </div>
@@ -381,6 +493,14 @@ const goBack = (): void => {
       <section class="form-section">
         <h3>{{ editingShiftId ? 'シフト編集' : 'シフト追加' }}</h3>
         <n-form ref="formRef" :model="form" label-placement="top">
+          <n-form-item label="勤務タイプ">
+            <n-select
+              v-model:value="selectedWorkType"
+              :options="WORK_TYPE_SELECT_OPTIONS"
+              placeholder="勤務タイプを選択"
+              clearable
+            />
+          </n-form-item>
           <n-form-item label="開始" path="start" :rule="{ required: true, message: '開始時刻を入力してください' }">
             <input v-model="form.start" type="time" class="time-input" />
           </n-form-item>
@@ -445,7 +565,12 @@ const goBack = (): void => {
         </n-form>
 
         <div class="drawer-actions">
-          <n-button type="primary" :loading="saving" @click="handleSubmit">
+          <n-button
+            type="primary"
+            :loading="saving"
+            :disabled="saving"
+            @click="handleSubmit"
+          >
             {{ editingShiftId ? '更新する' : '追加する' }}
           </n-button>
           <n-button quaternary @click="resetForm">クリア</n-button>
@@ -566,4 +691,5 @@ const goBack = (): void => {
   height: 36px;
   padding: 0 12px;
 }
+
 </style>

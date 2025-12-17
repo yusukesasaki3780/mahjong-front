@@ -43,11 +43,39 @@ export interface ShiftStatsSummary {
   count: number;
 }
 
+type ShiftRequestOptions = {
+  storeId?: number | string | null;
+};
+
 // シフト API のベースパスを生成する
 const basePath = (userId: string): string => `/users/${userId}/shifts`;
 // シフト詳細 API のパスを生成する
 const shiftDetailPath = (userId: string, shiftId: string): string =>
   `${basePath(userId)}/${shiftId}`;
+
+const resolveStoreIdParam = (options?: ShiftRequestOptions, caller?: string): number | null => {
+  if (options?.storeId == null) {
+    return null;
+  }
+  const numeric = Number(options.storeId);
+  if (!Number.isFinite(numeric)) {
+    if (import.meta.env?.DEV) {
+      // eslint-disable-next-line no-console
+      console.warn(`[ShiftAPI] ${caller ?? 'shift'} invalid storeId`, {
+        storeId: options.storeId,
+      });
+    }
+    return null;
+  }
+  if (import.meta.env?.DEV) {
+    // eslint-disable-next-line no-console
+    console.debug(`[ShiftAPI] ${caller ?? 'shift'} storeId resolved`, {
+      storeId: numeric,
+      raw: options.storeId,
+    });
+  }
+  return numeric;
+};
 
 // シフトデータの日付やメモを扱いやすい形に整形する
 const normalizeShift = (shift: Shift): Shift => {
@@ -179,9 +207,19 @@ const prepareShiftPayload = <T extends Partial<CreateShiftPayload>>(payload: T):
 export const getShifts = async (
   userId: string,
   params: MonthShiftParams,
+  options?: ShiftRequestOptions,
 ): Promise<Shift[]> => {
+  const storeId = resolveStoreIdParam(options, 'getShifts');
+  const requestParams: Record<string, unknown> = { ...params };
+  if (storeId != null) {
+    requestParams.storeId = storeId;
+  }
+  if (import.meta.env?.DEV) {
+    // eslint-disable-next-line no-console
+    console.debug('[ShiftAPI] getShifts params', requestParams);
+  }
   const { data } = await apiClient.get<Shift[]>(basePath(userId), {
-    params,
+    params: requestParams,
   });
   return normalizeShiftList(data);
 };
@@ -191,9 +229,23 @@ export const getWeekShifts = async (
   userId: string,
   start: string,
   end: string,
+  options?: ShiftRequestOptions,
 ): Promise<Shift[]> => {
+  const storeId = resolveStoreIdParam(options, 'getWeekShifts');
+  const requestParams: WeekShiftParams & Record<string, unknown> = {
+    rangeType: 'week',
+    start,
+    end,
+  };
+  if (storeId != null) {
+    requestParams.storeId = storeId;
+  }
+  if (import.meta.env?.DEV) {
+    // eslint-disable-next-line no-console
+    console.debug('[ShiftAPI] getWeekShifts params', requestParams);
+  }
   const { data } = await apiClient.get<Shift[]>(basePath(userId), {
-    params: { rangeType: 'week', start, end } satisfies WeekShiftParams,
+    params: requestParams satisfies WeekShiftParams & Record<string, unknown>,
   });
   return normalizeShiftList(data);
 };
@@ -202,9 +254,22 @@ export const getWeekShifts = async (
 export const getDailyShifts = async (
   userId: string,
   date: string,
+  options?: ShiftRequestOptions,
 ): Promise<Shift[]> => {
+  const storeId = resolveStoreIdParam(options, 'getDailyShifts');
+  const requestParams: DayShiftParams & Record<string, unknown> = {
+    rangeType: 'day',
+    date,
+  };
+  if (storeId != null) {
+    requestParams.storeId = storeId;
+  }
+  if (import.meta.env?.DEV) {
+    // eslint-disable-next-line no-console
+    console.debug('[ShiftAPI] getDailyShifts params', requestParams);
+  }
   const { data } = await apiClient.get<Shift[]>(basePath(userId), {
-    params: { rangeType: 'day', date } satisfies DayShiftParams,
+    params: requestParams satisfies DayShiftParams & Record<string, unknown>,
   });
   return normalizeShiftList(data);
 };
@@ -213,9 +278,19 @@ export const getDailyShifts = async (
 export const getShiftStats = async (
   userId: string,
   yearMonth: string,
+  options?: ShiftRequestOptions,
 ): Promise<ShiftStatsSummary> => {
+  const storeId = resolveStoreIdParam(options, 'getShiftStats');
+  const requestParams: Record<string, unknown> = { yearMonth };
+  if (storeId != null) {
+    requestParams.storeId = storeId;
+  }
+  if (import.meta.env?.DEV) {
+    // eslint-disable-next-line no-console
+    console.debug('[ShiftAPI] getShiftStats params', requestParams);
+  }
   const { data } = await apiClient.get<ShiftStatsSummary>(`${basePath(userId)}/stats`, {
-    params: { yearMonth },
+    params: requestParams,
   });
   return data;
 };
@@ -224,9 +299,17 @@ export const getShiftStats = async (
 export const createShift = async (
   userId: string,
   payload: CreateShiftPayload,
+  options?: ShiftRequestOptions,
 ): Promise<Shift> => {
   const nextPayload = prepareShiftPayload(payload);
-  const { data } = await apiClient.post<Shift>(basePath(userId), nextPayload);
+  const storeId = resolveStoreIdParam(options, 'createShift');
+  if (import.meta.env?.DEV) {
+    // eslint-disable-next-line no-console
+    console.log('[ShiftAPI] createShift params', { storeId });
+  }
+  const { data } = await apiClient.post<Shift>(basePath(userId), nextPayload, {
+    params: storeId != null ? { storeId } : undefined,
+  });
   return normalizeShift(data);
 };
 
@@ -235,9 +318,17 @@ export const replaceShift = async (
   userId: string,
   shiftId: string,
   payload: CreateShiftPayload,
+  options?: ShiftRequestOptions,
 ): Promise<Shift> => {
   const nextPayload = prepareShiftPayload(payload);
-  const { data } = await apiClient.put<Shift>(shiftDetailPath(userId, shiftId), nextPayload);
+  const storeId = resolveStoreIdParam(options, 'replaceShift');
+  if (import.meta.env?.DEV) {
+    // eslint-disable-next-line no-console
+    console.log('[ShiftAPI] replaceShift params', { storeId });
+  }
+  const { data } = await apiClient.put<Shift>(shiftDetailPath(userId, shiftId), nextPayload, {
+    params: storeId != null ? { storeId } : undefined,
+  });
   return normalizeShift(data);
 };
 
@@ -246,9 +337,17 @@ export const updateShift = async (
   userId: string,
   shiftId: string,
   payload: UpdateShiftPayload,
+  options?: ShiftRequestOptions,
 ): Promise<Shift> => {
   const nextPayload = prepareShiftPayload(payload);
-  const { data } = await apiClient.patch<Shift>(shiftDetailPath(userId, shiftId), nextPayload);
+  const storeId = resolveStoreIdParam(options, 'updateShift');
+  if (import.meta.env?.DEV) {
+    // eslint-disable-next-line no-console
+    console.log('[ShiftAPI] updateShift params', { storeId });
+  }
+  const { data } = await apiClient.patch<Shift>(shiftDetailPath(userId, shiftId), nextPayload, {
+    params: storeId != null ? { storeId } : undefined,
+  });
   return normalizeShift(data);
 };
 
@@ -256,6 +355,14 @@ export const updateShift = async (
 export const deleteShift = async (
   userId: string,
   shiftId: string,
+  options?: ShiftRequestOptions,
 ): Promise<void> => {
-  await apiClient.delete(shiftDetailPath(userId, shiftId));
+  const storeId = resolveStoreIdParam(options, 'deleteShift');
+  if (import.meta.env?.DEV) {
+    // eslint-disable-next-line no-console
+    console.log('[ShiftAPI] deleteShift params', { storeId });
+  }
+  await apiClient.delete(shiftDetailPath(userId, shiftId), {
+    params: storeId != null ? { storeId } : undefined,
+  });
 };
