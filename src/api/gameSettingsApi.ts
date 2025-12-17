@@ -1,3 +1,4 @@
+// ゲーム設定の取得・更新エンドポイントを扱うAPIモジュールです。
 import { apiClient } from './axios';
 
 export type WageType = 'HOURLY' | 'FIXED';

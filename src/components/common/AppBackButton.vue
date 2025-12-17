@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 任意の戻り先へナビゲートする共通バックボタンです。
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { NButton, NIcon } from 'naive-ui';

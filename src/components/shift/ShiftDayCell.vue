@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// シフトカレンダーの日付セルを描画し選択イベントを親へ通知します。
 import { computed } from 'vue';
 import dayjs from 'dayjs';
 import { NBadge } from 'naive-ui';

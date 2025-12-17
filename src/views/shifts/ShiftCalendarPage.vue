@@ -1,4 +1,5 @@
 ﻿<script setup lang="ts">
+// スタッフのシフトを月間カレンダーで一覧できるページです。
 import { computed, onMounted, ref, watch } from 'vue';
 import {
   useNotification,

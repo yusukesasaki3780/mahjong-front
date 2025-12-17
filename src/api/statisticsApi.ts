@@ -1,3 +1,4 @@
+// 統計・分析画面で使う成績集計APIの呼び出しを担当します。
 ﻿import dayjs from 'dayjs';
 import { apiClient, getStoredUserId } from './axios';
 import type {

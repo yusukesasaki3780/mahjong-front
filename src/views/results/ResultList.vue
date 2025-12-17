@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 対局成績を検索・精査しながら一覧表示するページです。
 import dayjs from 'dayjs';
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';

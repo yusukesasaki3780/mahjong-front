@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// ページタイトルや戻る導線をまとめた共通ヘッダーコンポーネントです。
 import { computed } from 'vue';
 import AppBackButton from './AppBackButton.vue';
 

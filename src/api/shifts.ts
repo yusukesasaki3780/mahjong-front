@@ -1,3 +1,4 @@
+// シフトの登録・編集・削除などCRUD操作用APIラッパーです。
 ﻿import dayjs from "dayjs";
 import { apiClient } from './axios';
 

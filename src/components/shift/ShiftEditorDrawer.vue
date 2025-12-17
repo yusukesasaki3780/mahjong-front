@@ -1,4 +1,5 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
+// シフトの新規作成や編集を行うドロワーフォームを提供するコンポーネントです。
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import {
   NButton,
@@ -29,6 +30,7 @@ import { extractErrorMessages } from '../../utils/validationMessages';
 import { getSpecialHourlyWages, type SpecialHourlyWage } from '../../api/specialWages';
 
 type BreakRange = { id: string; start: string; end: string };
+// 勤務帯を一意に表す識別子です。
 type WorkTypeValue =
   | 'EARLY_FULL'
   | 'EARLY_HALF_1'
@@ -37,6 +39,7 @@ type WorkTypeValue =
   | 'LATE_HALF_1'
   | 'LATE_HALF_2';
 
+// 勤務帯ごとの表示ラベルと開始・終了時刻プリセットです。
 const WORK_TYPES: { value: WorkTypeValue; label: string; start: string; end: string }[] = [
   { value: 'EARLY_FULL', label: '早〇 (10:00-22:00)', start: '10:00', end: '22:00' },
   { value: 'EARLY_HALF_1', label: '早ハーフ1 (10:00-17:00)', start: '10:00', end: '17:00' },
@@ -45,10 +48,12 @@ const WORK_TYPES: { value: WorkTypeValue; label: string; start: string; end: str
   { value: 'LATE_HALF_1', label: '遅ハーフ1 (22:00-05:00)', start: '22:00', end: '05:00' },
   { value: 'LATE_HALF_2', label: '遅ハーフ2 (05:00-10:00)', start: '05:00', end: '10:00' },
 ];
+// 勤務帯識別子から即座に時間帯を参照できるマップです。
 const WORK_TYPE_MAP = WORK_TYPES.reduce<Record<WorkTypeValue, { start: string; end: string }>>((acc, type) => {
   acc[type.value] = { start: type.start, end: type.end };
   return acc;
 }, {} as Record<WorkTypeValue, { start: string; end: string }>);
+// セレクトコンポーネントに渡す勤務帯オプションです。
 const WORK_TYPE_SELECT_OPTIONS = WORK_TYPES.map((type) => ({
   label: type.label,
   value: type.value,
@@ -66,6 +71,7 @@ const emit = defineEmits<{ (e: 'close'): void; (e: 'refresh'): void }>();
 
 const notification = useNotification();
 const storedUserId = getStoredUserId();
+// 操作対象となるユーザーIDを props と保存済みIDから解決
 const activeUserId = computed(() => props.userIdOverride ?? storedUserId);
 const formRef = ref<FormInst | null>(null);
 const saving = ref(false);
@@ -74,6 +80,7 @@ const existingBreakSummary = ref<number | null>(null);
 const specialWages = ref<SpecialHourlyWage[]>([]);
 const specialWagesLoading = ref(false);
 const SPECIAL_WAGE_NONE = null as unknown as number;
+// バリデーションエラー表示に使うフィールド名
 const shiftFieldLabels = {
   date: '日付',
   startTime: '開始時間',
@@ -83,12 +90,14 @@ const shiftFieldLabels = {
   memo: 'メモ',
 };
 
+// 休憩入力行用の空データを生成
 const createBreakRange = (): BreakRange => ({
   id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
   start: '',
   end: '',
 });
 
+// ドロワーフォーム全体の状態
 const form = reactive({
   start: '09:00',
   end: '18:00',
@@ -99,6 +108,7 @@ const selectedSpecialWageId = ref<number | null>(null);
 const selectedWorkType = ref<WorkTypeValue | null>(null);
 let isApplyingWorkType = false;
 
+// 店舗を指定する必要がある場合に API オプションを組み立てる
 const getStoreRequestOptions = (): { storeId: number } | undefined => {
   if (typeof props.storeIdOverride === 'number' && !Number.isNaN(props.storeIdOverride)) {
     return { storeId: Number(props.storeIdOverride) };
@@ -106,6 +116,7 @@ const getStoreRequestOptions = (): { storeId: number } | undefined => {
   return undefined;
 };
 
+// ネストしたレスポンスから時間帯重複エラーを探索
 const containsOverlapError = (source: unknown): boolean => {
   if (!source) {
     return false;
@@ -125,6 +136,7 @@ const containsOverlapError = (source: unknown): boolean => {
   return false;
 };
 
+// API エラーが時間帯重複かどうか判定
 const isOverlapTimeRangeError = (error: unknown): boolean => {
   if (!isApiClientError(error)) {
     return false;
@@ -132,6 +144,7 @@ const isOverlapTimeRangeError = (error: unknown): boolean => {
   return containsOverlapError(error.details);
 };
 
+// 編集対象や入力値を初期状態に戻す
 const resetForm = (): void => {
   editingShiftId.value = null;
   form.start = '09:00';
@@ -143,6 +156,7 @@ const resetForm = (): void => {
   selectedWorkType.value = null;
 };
 
+// 特別手当のマスタ一覧を取得しフォームに反映
 const fetchSpecialWages = async (): Promise<void> => {
   specialWagesLoading.value = true;
   try {
@@ -198,6 +212,7 @@ watch<[string, string]>(
   },
 );
 
+// サーバー値を入力用のHH:mmへ整形
 const toInputTime = (value?: string): string => {
   if (!value) {
     return '';
@@ -211,6 +226,7 @@ const toInputTime = (value?: string): string => {
   return value.slice(0, 5);
 };
 
+// 画面表示用にHH:mmへ整形
 const formatDisplayTime = (value?: string): string => {
   if (!value) {
     return '';
@@ -224,11 +240,13 @@ const formatDisplayTime = (value?: string): string => {
   return value.slice(0, 5);
 };
 
+// 現在の時間帯がどの勤務帯プリセットに該当するか判定
 const matchWorkType = (start: string, end: string): WorkTypeValue | null => {
   const matched = WORK_TYPES.find((type) => type.start === start && type.end === end);
   return matched ? matched.value : null;
 };
 
+// 既存シフトをクリックした際にフォームへ値を流し込む
 const selectShift = (shift: Shift): void => {
   editingShiftId.value = shift.id;
   form.start = toInputTime(shift.startTime);
@@ -258,6 +276,7 @@ const selectShift = (shift: Shift): void => {
   selectedWorkType.value = matchWorkType(form.start, form.end);
 };
 
+// 入力値を分単位に変換し計算しやすくする
 const parseTimeToMinutes = (value: string): number | null => {
   if (!value) return null;
   if (value.includes('T')) {
@@ -278,6 +297,7 @@ const parseTimeToMinutes = (value: string): number | null => {
 
 const ONE_DAY_MINUTES = 24 * 60;
 
+// 単一休憩の長さを算出（翌日跨ぎは24h加算）
 const getBreakDuration = (range: BreakRange): number | null => {
   const start = parseTimeToMinutes(range.start);
   const end = parseTimeToMinutes(range.end);
@@ -291,6 +311,7 @@ const getBreakDuration = (range: BreakRange): number | null => {
   return duration;
 };
 
+// 休憩の合計分数を返す算出プロパティ
 const totalBreakMinutes = computed(() =>
   form.breaks.reduce((sum, range) => {
     const duration = getBreakDuration(range);
@@ -301,6 +322,7 @@ const totalBreakMinutes = computed(() =>
   }, 0),
 );
 
+// 入力がそろった休憩だけをAPI送信用に整形
 const getValidBreaks = (): ShiftBreak[] =>
   form.breaks
     .filter((range) => range.start && range.end)
@@ -309,6 +331,7 @@ const getValidBreaks = (): ShiftBreak[] =>
       endTime: range.end,
     }));
 
+// API へ送るシフト登録ペイロードを作成
 const buildPayload = (): CreateShiftPayload => {
   if (!props.date) {
     throw new Error('日付が設定されていません');
@@ -327,6 +350,7 @@ const buildPayload = (): CreateShiftPayload => {
   };
 };
 
+// 休憩入力の整合性チェックを行いエラーを通知
 const validateBreaks = (): boolean => {
   const invalid = form.breaks.find((range) => {
     if (!range.start && !range.end) {
@@ -346,10 +370,12 @@ const validateBreaks = (): boolean => {
   return true;
 };
 
+// 休憩行を追加
 const addBreakRange = (): void => {
   form.breaks.push(createBreakRange());
 };
 
+// 指定IDの休憩行を削除（最低1行は残す）
 const removeBreakRange = (id: string): void => {
   if (form.breaks.length === 1) {
     form.breaks.splice(0, 1, createBreakRange());
@@ -362,6 +388,7 @@ const removeBreakRange = (id: string): void => {
 };
 
 
+// フォーム検証後にシフトを保存して一覧を更新
 const handleSubmit = async (): Promise<void> => {
   if (!formRef.value || !props.date) {
     return;
@@ -418,6 +445,7 @@ const handleSubmit = async (): Promise<void> => {
   }
 };
 
+// 選択したシフトを削除し編集状態をリセット
 const handleDelete = async (shiftId: string): Promise<void> => {
   const targetUserId = activeUserId.value;
   if (!targetUserId) {
@@ -442,10 +470,12 @@ const handleDelete = async (shiftId: string): Promise<void> => {
   }
 };
 
+// 親へ close イベントを通知
 const closeDrawer = (): void => {
   emit('close');
 };
 
+// 「戻る」ボタン押下時の処理（実質クローズ）
 const goBack = (): void => {
   closeDrawer();
 };

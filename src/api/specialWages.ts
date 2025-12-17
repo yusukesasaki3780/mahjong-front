@@ -1,3 +1,4 @@
+// 特別時給マスタの取得・登録系APIをまとめています。
 import { apiClient } from './axios';
 
 export interface SpecialHourlyWage {

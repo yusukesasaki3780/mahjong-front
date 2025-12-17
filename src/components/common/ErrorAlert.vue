@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// APIエラーやバリデーションメッセージをまとめて通知する共通アラートです。
 import { computed } from 'vue';
 import { NAlert } from 'naive-ui';
 

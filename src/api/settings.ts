@@ -1,3 +1,4 @@
+// アプリ共通設定を取得・更新するためのAPIラッパーです。
 ﻿import { apiClient } from './axios';
 
 export interface GameSettings {

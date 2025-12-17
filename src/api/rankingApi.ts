@@ -1,3 +1,4 @@
+// 各種ランキングデータを取得するAPI呼び出しを集約しています。
 import { apiClient } from './axios';
 import type { GameType } from '../types/gameResult';
 import type { PersonalRanking, RankingItem, RankingRange } from '../types/ranking';

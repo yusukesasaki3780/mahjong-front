@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 上旬・下旬を切り替える半月セレクターコンポーネントです。
 import { computed } from 'vue';
 import { NButton, NButtonGroup } from 'naive-ui';
 import type { ShiftBoardHalf } from '../../../api/shiftBoard';

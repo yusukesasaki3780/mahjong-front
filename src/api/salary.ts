@@ -1,3 +1,4 @@
+// 給与計算結果の取得や保存を行うAPIクライアントです。
 ﻿import { apiClient } from './axios';
 
 export interface SalarySummary {

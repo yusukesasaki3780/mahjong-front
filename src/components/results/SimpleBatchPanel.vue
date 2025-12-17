@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 成績をまとめて登録・更新する簡易バッチ入力フォームコンポーネントです。
 import dayjs from 'dayjs';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// プレイヤーの成績を比較するランキング表を描画するページです。
 import dayjs from 'dayjs';
 import { computed, onMounted, ref } from 'vue';
 import { useNotification, NButton, NButtonGroup, NCard, NSpin } from 'naive-ui';

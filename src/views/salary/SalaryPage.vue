@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 税金や当月の給与情報を確認するページです。
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import {

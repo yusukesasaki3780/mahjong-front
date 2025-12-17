@@ -1,3 +1,4 @@
+// 店舗マスタ情報を取得するための軽量APIクライアントです。
 import { apiClient } from './axios';
 
 export interface StoreMaster {

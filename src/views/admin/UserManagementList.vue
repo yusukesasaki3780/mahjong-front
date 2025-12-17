@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 管理者向けにユーザー一覧と操作を提供するページです。
 import dayjs from 'dayjs';
 import { isAxiosError } from 'axios';
 import { computed, onMounted, reactive, ref } from 'vue';

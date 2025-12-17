@@ -1,3 +1,4 @@
+// 認証・トークン更新などログイン周りのAPIラッパーをまとめています。
 import {
   apiClient,
   type AuthTokens,

@@ -1,3 +1,4 @@
+// 共通のaxiosインスタンス設定とリクエスト/レスポンス制御を担うユーティリティです。
 ﻿import axios, { AxiosHeaders } from 'axios';
 import { authStore } from '../stores/auth';
 import type {
@@ -571,4 +572,3 @@ export const getRefreshToken = tokenStorage.getRefreshToken.bind(tokenStorage);
 export const setUserId = userIdStorage.setUserId.bind(userIdStorage);
 export const getUserId = userIdStorage.getUserId.bind(userIdStorage);
 export const setIsAdminFlag = (flag: boolean): void => adminFlagStorage.set(flag);
-

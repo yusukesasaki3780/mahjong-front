@@ -1,4 +1,5 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
+// シフト統計の主要指標をカードで表示するダッシュボード用コンポーネントです。
 import { computed, watch } from 'vue';
 import { NCard, NStatistic, NIcon, useNotification } from 'naive-ui';
 import { TimeOutline, MoonOutline, StatsChartOutline, CalendarOutline } from '@vicons/ionicons5';

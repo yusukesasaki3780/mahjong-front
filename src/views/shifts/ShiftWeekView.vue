@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 週単位でシフト表示や操作を行うビューコンポーネントです。
 import { computed, onMounted, ref, watch } from 'vue';
 import { NButton, NCard, NDivider, NScrollbar, useNotification } from 'naive-ui';
 import dayjs, { type Dayjs } from 'dayjs';

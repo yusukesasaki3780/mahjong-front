@@ -1,4 +1,5 @@
 ﻿<script setup lang="ts">
+// 対局成績の新規登録や編集を行う入力フォームページです。
 import dayjs from 'dayjs';
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';

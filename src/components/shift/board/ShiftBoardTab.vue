@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// シフトボード全体の表示・データ取得・編集ハンドリングを担うタブコンポーネントです。
 import { computed, defineExpose, onMounted, reactive, ref, watch } from 'vue';
 import dayjs from 'dayjs';
 import {

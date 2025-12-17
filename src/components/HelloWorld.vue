@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// サンプルの挨拶メッセージとカウンターを表示するデモ用コンポーネントです。
 import { ref } from 'vue'
 
 defineProps<{ msg: string }>()

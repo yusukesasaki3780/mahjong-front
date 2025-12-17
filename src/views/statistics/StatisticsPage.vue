@@ -1,4 +1,5 @@
 ﻿<script setup lang="ts">
+// 成績の統計グラフや数値指標を切り替えて閲覧するページです。
 import { computed, onMounted, ref, watch } from 'vue';
 import { NCard, NSpin, NRadioGroup, NRadioButton, useNotification } from 'naive-ui';
 import { use } from 'echarts/core';

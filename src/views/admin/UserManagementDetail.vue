@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 管理者が個別ユーザーの詳細を確認し操作するための画面です。
 import dayjs from 'dayjs';
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';

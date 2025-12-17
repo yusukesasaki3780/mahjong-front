@@ -1,4 +1,5 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
+// シフトボードの表レイアウトと配置操作UIを描画する中心テーブルです。
 import dayjs from 'dayjs';
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import { NButton, NInput, NInputNumber } from 'naive-ui';

@@ -1,3 +1,4 @@
+// 対局成績の取得・登録・更新・削除APIをまとめたモジュールです。
 ﻿import { apiClient } from './axios';
 import dayjs from 'dayjs';
 import type {

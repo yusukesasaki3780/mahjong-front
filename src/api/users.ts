@@ -1,3 +1,4 @@
+// ユーザー情報の取得・更新・削除を扱うAPIラッパーです。
 ﻿import { apiClient } from './axios';
 
 export interface UserProfile {

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// ユーザー自身のプロフィール情報の閲覧と編集を行うページです。
 import { onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { NCard, NForm, NFormItem, NInput, NButton, useDialog, useMessage, type FormInst, type FormRules } from 'naive-ui';

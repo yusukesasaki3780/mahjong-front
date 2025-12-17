@@ -1,3 +1,4 @@
+// 管理者ページで使うユーザー管理系API呼び出しを集約したモジュールです。
 import { apiClient } from './axios';
 
 export interface AdminUserSummary {

@@ -1,3 +1,4 @@
+// 通知一覧取得や既読処理など通知関連APIをまとめたモジュールです。
 import { apiClient } from './axios';
 
 export interface ShiftNotification {

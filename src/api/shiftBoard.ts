@@ -1,3 +1,4 @@
+// シフトボード表示・要員数更新に関連するAPIを呼び出します。
 import dayjs from 'dayjs';
 import { apiClient } from './axios';
 

@@ -1,3 +1,4 @@
+// ダッシュボード画面用の集計データを取得するAPIラッパーです。
 ﻿import { apiClient } from './axios';
 import type { DashboardSummary } from '../types/dashboard';
 
