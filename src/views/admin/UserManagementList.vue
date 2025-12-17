@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import dayjs from 'dayjs';
+import { isAxiosError } from 'axios';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import {
@@ -9,6 +10,7 @@ import {
   NFormItem,
   NInput,
   NModal,
+  NSwitch,
   NSpin,
   NTable,
   useDialog,
@@ -23,6 +25,7 @@ import {
   fetchAdminUsers,
   resetAdminUserPassword,
   restoreAdminUser,
+  updateAdminUserAdminFlag,
   type AdminUserSummary,
 } from '../../api/adminUsers';
 import { extractErrorMessages } from '../../utils/validationMessages';
@@ -38,6 +41,7 @@ const users = ref<AdminUserSummary[]>([]);
 const errorMessages = ref<string[]>([]);
 const deletingUserId = ref<string | null>(null);
 const restoringUserId = ref<string | null>(null);
+const togglingAdminUserId = ref<string | null>(null);
 
 const PASSWORD_MIN = 8;
 const PASSWORD_MAX = 12;
@@ -77,7 +81,16 @@ const formatLastLogin = (value?: string | null): string => {
   return dayjs(value).format('YYYY/MM/DD HH:mm');
 };
 
-const displayUsers = computed(() => users.value.filter((user) => !user.isAdmin));
+const displayUsers = computed(() =>
+  [...users.value].sort((a, b) => {
+    if (Boolean(a.isAdmin) !== Boolean(b.isAdmin)) {
+      return Number(b.isAdmin) - Number(a.isAdmin);
+    }
+    const nameA = a.name ?? '';
+    const nameB = b.name ?? '';
+    return nameA.localeCompare(nameB);
+  }),
+);
 
 const statusLabel = (user: AdminUserSummary): string => (user.isDeleted ? '削除済み' : '有効');
 
@@ -87,12 +100,23 @@ const handleErrors = (error: unknown, fallback: string): void => {
   });
 };
 
+const redirectToDashboardIfForbidden = (error: unknown): boolean => {
+  if (isAxiosError(error) && error.response?.status === 403) {
+    router.replace('/dashboard');
+    return true;
+  }
+  return false;
+};
+
 const loadUsers = async (): Promise<void> => {
   loading.value = true;
   errorMessages.value = [];
   try {
     users.value = await fetchAdminUsers();
   } catch (error) {
+    if (redirectToDashboardIfForbidden(error)) {
+      return;
+    }
     handleErrors(error, 'ユーザー一覧の取得に失敗しました');
   } finally {
     loading.value = false;
@@ -184,6 +208,42 @@ const handleRestoreUser = (user: AdminUserSummary): void => {
   });
 };
 
+const handleToggleAdmin = (user: AdminUserSummary, nextValue: boolean): void => {
+  if (user.id === currentUserId) {
+    message.warning('自分の管理者権限は変更できません');
+    return;
+  }
+  if (user.isDeleted) {
+    message.warning('削除済みユーザーの権限は変更できません');
+    return;
+  }
+  const confirmMessage = nextValue
+    ? 'このユーザーに管理者権限を付与しますか？'
+    : 'このユーザーの管理者権限を解除しますか？';
+  dialog.warning({
+    title: '管理者権限の更新',
+    content: confirmMessage,
+    positiveText: '実行',
+    negativeText: 'キャンセル',
+    type: nextValue ? 'info' : 'warning',
+    onPositiveClick: async () => {
+      togglingAdminUserId.value = user.id;
+      try {
+        await updateAdminUserAdminFlag(user.id, nextValue);
+        message.success('管理者権限を更新しました');
+        await loadUsers();
+      } catch (error) {
+        if (redirectToDashboardIfForbidden(error)) {
+          return;
+        }
+        handleErrors(error, '管理者権限の更新に失敗しました');
+      } finally {
+        togglingAdminUserId.value = null;
+      }
+    },
+  });
+};
+
 onMounted(() => {
   loadUsers().catch(() => undefined);
 });
@@ -211,6 +271,8 @@ onMounted(() => {
                 <th>メールアドレス</th>
                 <th>所属店舗</th>
                 <th>状態</th>
+                <th>権限</th>
+                <th>管理者切替</th>
                 <th>最終ログイン</th>
                 <th class="actions-header">操作</th>
               </tr>
@@ -230,6 +292,25 @@ onMounted(() => {
                   >
                     {{ statusLabel(user) }}
                   </span>
+                </td>
+                <td>
+                  <span
+                    :class="[
+                      'role-badge',
+                      user.isAdmin ? 'role-badge--admin' : 'role-badge--general',
+                    ]"
+                  >
+                    {{ user.isAdmin ? '管理者' : '一般' }}
+                  </span>
+                </td>
+                <td class="toggle-cell">
+                  <n-switch
+                    size="small"
+                    :value="Boolean(user.isAdmin)"
+                    :loading="togglingAdminUserId === user.id"
+                    :disabled="user.id === currentUserId || user.isDeleted"
+                    @update:value="(value: boolean) => handleToggleAdmin(user, value)"
+                  />
                 </td>
                 <td>{{ formatLastLogin(user.lastLoginAt) }}</td>
                 <td class="actions-cell">
@@ -289,6 +370,31 @@ onMounted(() => {
                 >
                   {{ statusLabel(user) }}
                 </span>
+              </span>
+            </div>
+            <div class="user-card-row role-row">
+              <span class="label">権限</span>
+              <span class="value">
+                <span
+                  :class="[
+                    'role-badge',
+                    user.isAdmin ? 'role-badge--admin' : 'role-badge--general',
+                  ]"
+                >
+                  {{ user.isAdmin ? '管理者' : '一般' }}
+                </span>
+              </span>
+            </div>
+            <div class="user-card-row toggle-row">
+              <span class="label">管理者切替</span>
+              <span class="value">
+                <n-switch
+                  size="small"
+                  :value="Boolean(user.isAdmin)"
+                  :loading="togglingAdminUserId === user.id"
+                  :disabled="user.id === currentUserId || user.isDeleted"
+                  @update:value="(value: boolean) => handleToggleAdmin(user, value)"
+                />
               </span>
             </div>
             <div class="user-card-row">
@@ -412,6 +518,29 @@ table :deep(td) {
   color: #b91c1c;
 }
 
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.role-badge--admin {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.role-badge--general {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.toggle-cell {
+  text-align: center;
+}
+
 .is-deleted-row td {
   color: #94a3b8;
 }
@@ -460,6 +589,11 @@ table :deep(td) {
   justify-content: flex-end;
   gap: 8px;
   margin-top: 4px;
+}
+
+.toggle-row .value {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .modal-description {

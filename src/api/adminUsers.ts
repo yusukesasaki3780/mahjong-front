@@ -4,13 +4,14 @@ export interface AdminUserSummary {
   id: string;
   name: string;
   email: string;
+  storeId?: number;
   storeName?: string;
   nickname?: string;
   nickName?: string;
   prefectureCode?: string;
   lastLoginAt?: string | null;
-  isAdmin?: boolean;
-  isDeleted?: boolean;
+  isAdmin: boolean;
+  isDeleted: boolean;
   [key: string]: unknown;
 }
 
@@ -47,4 +48,12 @@ export const restoreAdminUser = async (userId: string): Promise<void> => {
 
 export const resetAdminUserPassword = async (userId: string, payload: PasswordResetPayload): Promise<void> => {
   await apiClient.post(`/admin/users/${userId}/password-reset`, payload);
+};
+
+export const updateAdminUserAdminFlag = async (
+  userId: string,
+  isAdmin: boolean,
+): Promise<AdminUserSummary> => {
+  const { data } = await apiClient.patch<AdminUserSummary>(`/admin/users/${userId}/admin`, { isAdmin });
+  return data;
 };

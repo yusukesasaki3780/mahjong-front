@@ -602,6 +602,7 @@ const uiLocale = jaJP;
               <ShiftBoardTab
                 ref="boardTabRef"
                 :is-admin="Boolean(isAdminUser)"
+                :initial-store-id="selfStoreId"
                 @edit-shift-request="handleBoardEditShift"
               />
             </n-tab-pane>

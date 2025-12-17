@@ -33,6 +33,7 @@ import ShiftBoardTable, {
 
 const props = defineProps<{
   isAdmin: boolean;
+  initialStoreId?: number | null;
 }>();
 
 const emit = defineEmits<{
@@ -50,6 +51,7 @@ const emit = defineEmits<{
 const message = useMessage();
 const storeOptions = ref<StoreMaster[]>([]);
 const selectedStoreId = ref<number | null>(null);
+const hasUserSelectedStore = ref(false);
 const selectedMonth = ref(dayjs().startOf('month').valueOf());
 const selectedHalf = ref<ShiftBoardHalf>('first');
 const loadingStores = ref(false);
@@ -95,13 +97,35 @@ const storeNameMap = computed<Record<number, string>>(() => {
   return map;
 });
 
+const updateSelectedStoreId = (value: number | null, options?: { user?: boolean }): void => {
+  selectedStoreId.value = value;
+  if (options?.user) {
+    hasUserSelectedStore.value = true;
+  }
+};
+
+const tryApplyInitialStoreSelection = (): void => {
+  if (hasUserSelectedStore.value) {
+    return;
+  }
+  const candidate = props.initialStoreId;
+  if (typeof candidate === 'number' && !Number.isNaN(candidate)) {
+    const exists = storeOptions.value.some((store) => store.id === candidate);
+    if (exists) {
+      updateSelectedStoreId(candidate, { user: false });
+      return;
+    }
+  }
+  if (!selectedStoreId.value && storeOptions.value.length > 0) {
+    updateSelectedStoreId(storeOptions.value[0]!.id, { user: false });
+  }
+};
+
 const loadStores = async (): Promise<void> => {
   loadingStores.value = true;
   try {
     storeOptions.value = await getStoreMasters();
-    if (!selectedStoreId.value && storeOptions.value.length > 0) {
-      selectedStoreId.value = storeOptions.value[0]!.id;
-    }
+    tryApplyInitialStoreSelection();
   } catch (error) {
     console.error(error);
     message.error('店舗リストの取得に失敗しました');
@@ -572,16 +596,27 @@ watch(
   selectableStores,
   (stores) => {
     if (!stores.length) {
-      selectedStoreId.value = null;
+      updateSelectedStoreId(null, { user: false });
       return;
     }
     const hasSelected = stores.some((store) => store.id === selectedStoreId.value);
     if (!hasSelected) {
-      selectedStoreId.value = stores[0]!.id;
+      updateSelectedStoreId(stores[0]!.id, { user: false });
     }
   },
   { immediate: true },
 );
+
+watch(
+  () => props.initialStoreId,
+  () => {
+    tryApplyInitialStoreSelection();
+  },
+);
+
+const handleStoreSelect = (value: number | null) => {
+  updateSelectedStoreId(value, { user: true });
+};
 
 const helpMemberOptions = computed(() => {
   const storeId = helpStoreId.value;
@@ -659,11 +694,12 @@ defineExpose({ refresh });
       <div class="control-group">
         <label>対象店舗</label>
         <n-select
-          v-model:value="selectedStoreId"
+          :value="selectedStoreId"
           :options="storeSelectOptions"
-          placeholder="店舗を選択"
+          placeholder="対象店舗を選択"
           :loading="loadingStores"
           :disabled="storeSelectDisabled"
+          @update:value="handleStoreSelect"
         />
       </div>
       <div class="control-group">
